@@ -1,0 +1,181 @@
+"use client"
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@/lib/supabase/client';
+import { Card, CardContent } from '@/components/ui/card';
+import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Star, TrendingUp, Gift } from 'lucide-react'; // Thêm icon
+
+const trendingTags = ['#TeamWork', '#ProblemSolver', '#Q3Goals', '#OfficeLife', '#FridayFeeling'];
+
+const RightSidebar = ({ currentUser }) => {
+  const supabase = createClient();
+  const [receivedKudosCount, setReceivedKudosCount] = useState(0);
+  const [realTopGivers, setRealTopGivers] = useState([]);
+  const [realTopReceivers, setRealTopReceivers] = useState([]); // [NEW] State cho Top Receivers
+
+  // --- LOGIC 1: LẤY SỐ KUDOS CỦA MÌNH ---
+  const fetchUserStats = async (userId) => {
+    const { count, error } = await supabase
+        .from('kudos_receivers')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId);
+    if (!error) setReceivedKudosCount(count || 0);
+  };
+
+  // --- LOGIC 2: LẤY TOP GIVERS (Người gửi nhiều nhất) ---
+  const fetchTopGivers = async () => {
+    const { data: allKudos, error } = await supabase.from('kudos').select('sender_id');
+    if (!error && allKudos) {
+        const counts = allKudos.reduce((acc, curr) => {
+            acc[curr.sender_id] = (acc[curr.sender_id] || 0) + 1;
+            return acc;
+        }, {});
+        const topIds = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 3);
+        processLeaderboard(topIds, counts, setRealTopGivers, 'given');
+    }
+  };
+
+  // --- LOGIC 3: LẤY TOP RECEIVERS (Người nhận nhiều nhất) [NEW] ---
+  const fetchTopReceivers = async () => {
+    // Đếm số lần xuất hiện của user_id trong bảng kudos_receivers
+    const { data: allReceivers, error } = await supabase.from('kudos_receivers').select('user_id');
+    
+    if (!error && allReceivers) {
+        const counts = allReceivers.reduce((acc, curr) => {
+            acc[curr.user_id] = (acc[curr.user_id] || 0) + 1;
+            return acc;
+        }, {});
+
+        // Lấy top 3 ID có số lượng nhận nhiều nhất
+        const topIds = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 3);
+        
+        // Gọi hàm xử lý chung để lấy thông tin profile và set state
+        processLeaderboard(topIds, counts, setRealTopReceivers, 'received');
+    }
+  };
+
+  // Hàm phụ trợ để xử lý logic lấy profile và map dữ liệu cho cả Giver và Receiver
+  const processLeaderboard = async (topIds, counts, setState, typeLabel) => {
+      if (topIds.length > 0) {
+          const { data: profiles } = await supabase.from('profiles').select('id, full_name, avatar_url').in('id', topIds);
+          if (profiles) {
+              const leaderboard = topIds.map((id, index) => {
+                  const profile = profiles.find(p => p.id === id);
+                  return {
+                      id: id,
+                      rank: index + 1,
+                      name: profile?.full_name || 'Unknown',
+                      count: counts[id],
+                      avatar: profile?.avatar_url,
+                      isTop: index === 0,
+                      label: typeLabel === 'given' ? 'Given' : 'Received'
+                  };
+              });
+              setState(leaderboard);
+          }
+      } else {
+          setState([]);
+      }
+  }
+
+  // --- USE EFFECT ---
+  useEffect(() => {
+    fetchTopGivers();
+    fetchTopReceivers(); // [NEW] Gọi hàm fetch receiver
+    if (currentUser) {
+        fetchUserStats(currentUser.id);
+    }
+
+    const channel = supabase
+      .channel('right_sidebar_realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kudos' }, () => {
+          fetchTopGivers(); // Update Givers khi có bài mới
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kudos_receivers' }, () => {
+          fetchTopReceivers(); // [NEW] Update Receivers khi có người nhận mới
+          if (currentUser) fetchUserStats(currentUser.id); // Update stats của mình
+      })
+      .subscribe();
+
+    return () => {
+        supabase.removeChannel(channel);
+    };
+  }, [currentUser]);
+
+  // Component hiển thị danh sách xếp hạng để tái sử dụng
+  const LeaderboardList = ({ title, data, icon: Icon }) => (
+    <div className="mb-8">
+        <div className="flex items-center justify-between mb-4">
+            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                {Icon && <Icon size={18} className="text-blue-500"/>} {title}
+            </h3>
+        </div>
+        <div className="space-y-4">
+            {data.length === 0 ? (
+                <p className="text-gray-400 text-sm italic">No data yet.</p>
+            ) : (
+                data.map((user, idx) => (
+                    <div key={user.id || idx} className="flex items-center gap-3 group cursor-pointer p-2 rounded-xl hover:bg-gray-50 transition-colors">
+                        <span className={`text-sm font-bold w-6 text-center ${idx === 0 ? 'text-yellow-500 text-lg' : 'text-gray-400'}`}>
+                            {user.rank}
+                        </span>
+                        <Avatar className="w-10 h-10 border border-gray-100 group-hover:border-blue-200 transition-colors">
+                            <AvatarImage src={user.avatar} />
+                            <AvatarFallback>{user.name ? user.name[0] : 'U'}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                            <p className="font-bold text-sm text-gray-900 truncate group-hover:text-blue-600 transition-colors">
+                                {user.name}
+                            </p>
+                            <p className="text-xs text-gray-500 font-medium">
+                                {user.count} Kudos {user.label}
+                            </p>
+                        </div>
+                        {user.isTop && <Star className="text-yellow-400 fill-yellow-400 shrink-0" size={16} />}
+                    </div>
+                ))
+            )}
+        </div>
+    </div>
+  );
+
+  return (
+    <aside className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto hidden xl:block sticky top-0 h-screen scrollbar-hide">
+       {/* PHẦN YOUR IMPACT */}
+       <Card className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white mb-8 shadow-xl border-none rounded-3xl overflow-hidden relative">
+           {/* Thêm chút họa tiết nền cho đẹp */}
+           <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
+           <CardContent className="p-6 relative z-10">
+               <h3 className="text-xs font-bold uppercase opacity-80 tracking-wider mb-1">Total Kudos Received</h3>
+               <div className="text-5xl font-extrabold my-3 tracking-tight">
+                   {receivedKudosCount}
+               </div>
+               <div className="w-full bg-black/20 rounded-full h-1.5 mb-2 overflow-hidden">
+                   <div className="bg-white/90 rounded-full h-full shadow-sm animate-pulse" style={{ width: '65%' }}></div>
+               </div>
+               <p className="text-xs opacity-80 font-medium">You are doing great!</p>
+           </CardContent>
+       </Card>
+
+       {/* PHẦN TOP GIVERS */}
+       <LeaderboardList title="Top Givers" data={realTopGivers} icon={Gift} />
+
+       {/* PHẦN TOP RECEIVERS [NEW] */}
+       <LeaderboardList title="Top Receivers" data={realTopReceivers} icon={TrendingUp} />
+       
+       {/* Trending Tags */}
+       <div className="pt-4 border-t border-gray-100">
+            <h3 className="font-bold text-gray-900 mb-4 text-sm uppercase tracking-wide text-gray-400">Trending Now</h3>
+            <div className="flex flex-wrap gap-2">
+                {trendingTags.map(tag => (
+                    <Badge key={tag} variant="secondary" className="bg-gray-50 text-gray-600 hover:bg-blue-50 hover:text-blue-600 cursor-pointer px-3 py-1.5 transition-all font-medium border border-gray-100">{tag}</Badge>
+                ))}
+            </div>
+        </div>
+    </aside>
+  );
+};
+
+export default RightSidebar;

@@ -40,7 +40,7 @@ export async function updateSession(request) {
   // 4. Logic bảo vệ Route (Redirect)
   
   // Nếu chưa đăng nhập mà cố vào trang chủ (/) -> Đá về /login
-  if (!user && request.nextUrl.pathname === '/') {
+  if (!user && (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '/leaderboard' || request.nextUrl.pathname === '/profile')) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
