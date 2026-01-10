@@ -1,24 +1,26 @@
 "use client"
+
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Trophy, Settings, LogOut } from 'lucide-react';
+import { Home, Trophy, LogOut, User } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
+import { useUser } from '@/context/UserContext'; // <--- IMPORT CONTEXT
 
-// Mở hàm tại đây
-const LeftSidebar = ({ currentUser }) => { 
+const LeftSidebar = () => { // Không cần nhận props nữa
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
+  
+  // Lấy user từ Context (đã fetch sẵn ở layout)
+  const { user, profile } = useUser(); 
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
     router.push('/login');
   };
-
-  // KHÔNG đóng hàm ở đây. Hãy xóa dấu } cũ đi.
 
   return (
       <aside className="w-64 bg-white border-r border-gray-200 flex flex-col hidden md:flex shadow-sm z-10 sticky top-0 h-screen">
@@ -42,14 +44,21 @@ const LeftSidebar = ({ currentUser }) => {
           </Link>
            <Link href="/profile">
              <Button variant="ghost" className={`w-full justify-start gap-3 font-semibold ${pathname === '/profile' ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}>
-                <Trophy size={20}/> Profile
+                <User size={20}/> Profile {/* Đổi icon Trophy thành User cho đúng nghĩa */}
              </Button>
           </Link>
             <div className="mt-auto pt-6 border-t border-gray-50 mx-2">
                 <div className="p-4 bg-gray-50/80 rounded-2xl border border-gray-100/80 hover:border-blue-100 transition-colors">
                     <div className="flex items-center gap-3 mb-3">
-                        <Avatar className="w-10 h-10 ring-2 ring-blue-500 ring-offset-2"><AvatarImage src={currentUser?.avatar_url}/><AvatarFallback>Me</AvatarFallback></Avatar>
-                        <div className="flex-1 min-w-0"><p className="text-sm font-bold truncate">{currentUser?.full_name}</p><p className="text-xs text-blue-600">Online</p></div>
+                        {/* Dùng profile từ context để hiển thị */}
+                        <Avatar className="w-10 h-10 ring-2 ring-blue-500 ring-offset-2">
+                            <AvatarImage src={profile?.avatar_url}/>
+                            <AvatarFallback>{profile?.full_name?.charAt(0) || 'U'}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                            <p className="text-sm font-bold truncate">{profile?.full_name || 'Loading...'}</p>
+                            <p className="text-xs text-blue-600">Online</p>
+                        </div>
                     </div>
                     <Button onClick={handleLogout} variant="outline" size="sm" className="w-full gap-2 text-gray-600 hover:text-red-600"><LogOut size={14}/> Log Out</Button>
                 </div>
@@ -57,6 +66,6 @@ const LeftSidebar = ({ currentUser }) => {
         </nav>
       </aside>
   );
-}; // <--- ĐÓNG HÀM TẠI ĐÂY LÀ ĐÚNG
+};
 
 export default LeftSidebar;

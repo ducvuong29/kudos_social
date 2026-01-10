@@ -1,70 +1,54 @@
-"use client" // <--- Thêm dòng này đầu tiên
+"use client"
+
 import { Inter } from "next/font/google";
 import "./globals.css";
-import LeftSidebar from "@/components/layouts/LeftSidebar"; // Sửa lại đường dẫn import nếu cần
-import RightSidebar from "@/components/layouts/RightSidebar"; // Sửa lại đường dẫn import nếu cần
-import { useState, useEffect } from "react";
-import { createClient } from '@/lib/supabase/client';
-import { usePathname } from 'next/navigation'; // <--- Import hook này
-
+import LeftSidebar from "@/components/layouts/LeftSidebar";
+import RightSidebar from "@/components/layouts/RightSidebar";
+import { usePathname } from 'next/navigation';
+import { UserProvider } from "@/context/UserContext"; // Đảm bảo đường dẫn đúng
+import { KudosProvider } from "@/context/KudosContext"; // <--- Import mới
 const inter = Inter({ subsets: ["latin"] });
 
-// Vì layout là Client Component, ta không export metadata ở đây được nữa.
-// Nếu cần SEO, bạn nên tách Logic Sidebar ra một component riêng gọi là <AppShell>
-// Nhưng để đơn giản, mình làm trực tiếp ở đây.
-
 export default function RootLayout({ children }) {
-  const [currentUser, setCurrentUser] = useState(null);
-  const supabase = createClient();
-  const pathname = usePathname(); // Lấy đường dẫn hiện tại
+  const pathname = usePathname();
 
-  useEffect(() => {
-     // Fetch user global (Chỉ chạy khi user đã login và không ở trang login)
-     const getUser = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if(user) {
-             const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-             setCurrentUser(data);
-        }
-     }
-     
-     if (pathname !== '/login') {
-        getUser();
-     }
-  }, [pathname]);
-
-  // --- LOGIC ẨN HIỆN SIDEBAR ---
+  // Logic hiển thị Sidebar
   const isLoginPage = pathname === '/login';
-  const isHomePage = pathname === '/';
+  // Các trang khác ngoài login thì hiện sidebar (tùy chỉnh thêm nếu có trang khác)
   
-  // Logic: 
-  // 1. Nếu là trang login: Ẩn hết Sidebar.
-  // 2. Nếu không phải login: Luôn hiện LeftSidebar.
-  // 3. RightSidebar: Chỉ hiện ở trang chủ (isHomePage).
+  const isHomePage = pathname === '/'; 
+  // RightSidebar chỉ hiện ở trang chủ
 
   return (
     <html lang="en">
       <body className={inter.className}>
-        {isLoginPage ? (
-            // Layout cho trang Login (Full màn hình, không sidebar)
+        {/* Bọc UserProvider ở ngoài cùng để toàn bộ app (kể cả Login hay Main) 
+            đều truy cập được data user mà không cần fetch lại.
+        */}
+        <UserProvider>
+          <KudosProvider>
+          {isLoginPage ? (
+            // Layout cho trang Login (Full màn hình)
             <main className="min-h-screen bg-gray-50">
-               {children}
+              {children}
             </main>
-        ) : (
-            // Layout cho App (Có Sidebar)
+          ) : (
+            // Layout chính cho App
             <div className="flex h-screen bg-gray-50 font-sans text-gray-900">
-                {/* Sidebar Trái - Luôn hiển thị trừ khi ở Login */}
-                <LeftSidebar currentUser={currentUser} />
+              {/* LeftSidebar tự dùng useUser(), không cần truyền prop nữa */}
+              <LeftSidebar />
 
-                {/* Nội dung chính */}
-                <main className="flex-1 overflow-y-auto bg-gray-50/50">
-                   {children}
-                </main>
+              {/* Nội dung chính */}
+              <main className="flex-1 overflow-y-auto bg-gray-50/50 relative">
+                 {children}
+              </main>
 
-                {/* Sidebar Phải - Chỉ hiển thị ở Trang Chủ */}
-                {isHomePage && <RightSidebar currentUser={currentUser} />}
+              {/* RightSidebar tự dùng useUser() */}
+              {isHomePage && <RightSidebar />}
             </div>
-        )}
+          )}
+          </KudosProvider>
+        </UserProvider>
       </body>
     </html>
   );

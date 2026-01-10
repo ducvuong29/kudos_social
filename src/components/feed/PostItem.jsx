@@ -1,7 +1,7 @@
 "use client"
 
-import React, { useState, useRef, useEffect } from 'react';
-import { ThumbsUp, MessageSquare, Share2, MoreHorizontal, Edit2, Trash2, Send, X, Check } from 'lucide-react';
+import React, { useState } from 'react';
+import { ThumbsUp, MessageSquare, Share2, MoreHorizontal, Edit2, Trash2, Send } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -13,8 +13,9 @@ import { formatDistanceToNow } from 'date-fns';
 import { vi } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
+import { useUser } from '@/context/UserContext'; // <--- Sử dụng Context
 
-// --- CONSTANTS (Mang từ file cũ sang) ---
+// --- CONSTANTS ---
 const REACTION_TYPES = [
   { id: 'like', emoji: '👍', label: 'Thích', color: 'text-blue-600' },
   { id: 'love', emoji: '❤️', label: 'Yêu', color: 'text-red-500' },
@@ -43,10 +44,12 @@ const triggerConfetti = () => {
   confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
 };
 
-const PostItem = ({ post, currentUser, onDelete, onUpdate, onImageClick }) => {
+// Bỏ prop currentUser vì đã lấy từ Context
+const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   const supabase = createClient();
-  
-  // State nội bộ của bài viết
+  const { user: currentUser } = useUser(); // Lấy user từ Context
+
+  // State nội bộ
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editMessage, setEditMessage] = useState(post.message);
@@ -54,10 +57,8 @@ const PostItem = ({ post, currentUser, onDelete, onUpdate, onImageClick }) => {
   // State Comment
   const [showComments, setShowComments] = useState(false);
   const [commentInput, setCommentInput] = useState('');
-  const [editingCommentId, setEditingCommentId] = useState(null);
-  const [editCommentContent, setEditCommentContent] = useState('');
   
-  // Mention State (Internalized)
+  // Mention State
   const [showMentionPopup, setShowMentionPopup] = useState(false);
   const [mentionQuery, setMentionQuery] = useState('');
   const [mentionResults, setMentionResults] = useState([]);
@@ -83,22 +84,25 @@ const PostItem = ({ post, currentUser, onDelete, onUpdate, onImageClick }) => {
 
   // --- LOGIC REACTION ---
   const handleReaction = async (type) => {
+    if (!currentUser) return;
+
     const existingReaction = post.reactions.find(r => r.user_id === currentUser.id);
     const isRemoving = existingReaction && existingReaction.type === type;
     
-    // Optimistic Update (Cập nhật UI trước khi gọi API)
+    // Optimistic Update
     let newReactions = post.reactions.filter(r => r.user_id !== currentUser.id);
     if (!isRemoving) {
         newReactions.push({ user_id: currentUser.id, type });
         triggerConfetti();
     }
+    // Cập nhật ngay UI thông qua Context (hàm onUpdate được truyền từ cha xuống)
     onUpdate({ ...post, reactions: newReactions });
 
     // Gọi API
     await supabase.from('reactions').delete().match({ kudos_id: post.id, user_id: currentUser.id });
     if (!isRemoving) {
        await supabase.from('reactions').insert({ kudos_id: post.id, user_id: currentUser.id, type });
-       if (post.sender.id !== currentUser.id) {
+       if (post.sender?.id !== currentUser.id) {
            await supabase.from('notifications').insert({ recipient_id: post.sender.id, sender_id: currentUser.id, type: 'reaction', resource_id: post.id });
        }
     }
@@ -139,19 +143,22 @@ const PostItem = ({ post, currentUser, onDelete, onUpdate, onImageClick }) => {
   };
 
   const submitComment = async () => {
-    if (!commentInput.trim()) return;
+    if (!commentInput.trim() || !currentUser) return;
+    
     const { data: newComment, error } = await supabase.from('comments')
         .insert({ kudos_id: post.id, user_id: currentUser.id, content: commentInput })
         .select('*, user:user_id(full_name, avatar_url, id)').single();
         
     if (!error) {
         const updatedComments = [...(post.comments || []), newComment];
+        // Cập nhật UI thông qua Context
         onUpdate({ ...post, comments: updatedComments });
+        
         setCommentInput('');
         setPendingMentions([]);
 
         // Notification logic
-        if (post.sender.id !== currentUser.id) {
+        if (post.sender?.id !== currentUser.id) {
             await supabase.from('notifications').insert({ recipient_id: post.sender.id, sender_id: currentUser.id, type: 'comment', resource_id: post.id });
         }
         // Mention notification
@@ -226,7 +233,7 @@ const PostItem = ({ post, currentUser, onDelete, onUpdate, onImageClick }) => {
             {post.image_urls?.length > 0 && (
                <div className={`grid gap-3 mb-5 rounded-2xl overflow-hidden ${post.image_urls.length>1?'grid-cols-2':'grid-cols-1'}`}>
                   {post.image_urls.map((img, i) => (
-                    <div key={i} className="relative aspect-video bg-gray-100 cursor-zoom-in" onClick={() => onImageClick(img)}>
+                    <div key={i} className="relative aspect-video bg-gray-100 cursor-zoom-in" onClick={() => onImageClick && onImageClick(img)}>
                        <img src={img} className="absolute inset-0 w-full h-full object-cover hover:scale-105 transition-transform duration-500"/>
                     </div>
                   ))}

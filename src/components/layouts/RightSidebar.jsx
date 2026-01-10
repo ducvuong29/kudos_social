@@ -1,30 +1,36 @@
 "use client"
+
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Star, TrendingUp, Gift } from 'lucide-react'; // Thêm icon
+import { Star, TrendingUp, Gift } from 'lucide-react';
+import { useUser } from '@/context/UserContext'; // <--- Import UserContext
+// import { useKudos } from '@/context/KudosContext'; // Có thể dùng nếu muốn tính toán từ client state
 
 const trendingTags = ['#TeamWork', '#ProblemSolver', '#Q3Goals', '#OfficeLife', '#FridayFeeling'];
 
-const RightSidebar = ({ currentUser }) => {
+const RightSidebar = () => { // Không cần props currentUser nữa
   const supabase = createClient();
+  const { user: currentUser } = useUser(); // Lấy user từ Context
+
   const [receivedKudosCount, setReceivedKudosCount] = useState(0);
   const [realTopGivers, setRealTopGivers] = useState([]);
-  const [realTopReceivers, setRealTopReceivers] = useState([]); // [NEW] State cho Top Receivers
+  const [realTopReceivers, setRealTopReceivers] = useState([]);
 
   // --- LOGIC 1: LẤY SỐ KUDOS CỦA MÌNH ---
-  const fetchUserStats = async (userId) => {
+  const fetchUserStats = async () => {
+    if (!currentUser) return;
     const { count, error } = await supabase
         .from('kudos_receivers')
         .select('*', { count: 'exact', head: true })
-        .eq('user_id', userId);
+        .eq('user_id', currentUser.id);
     if (!error) setReceivedKudosCount(count || 0);
   };
 
-  // --- LOGIC 2: LẤY TOP GIVERS (Người gửi nhiều nhất) ---
+  // --- LOGIC 2 & 3: FETCH TOP GIVERS & RECEIVERS ---
+  // (Giữ nguyên logic fetch API để đảm bảo tính chính xác toàn thời gian)
   const fetchTopGivers = async () => {
     const { data: allKudos, error } = await supabase.from('kudos').select('sender_id');
     if (!error && allKudos) {
@@ -37,26 +43,18 @@ const RightSidebar = ({ currentUser }) => {
     }
   };
 
-  // --- LOGIC 3: LẤY TOP RECEIVERS (Người nhận nhiều nhất) [NEW] ---
   const fetchTopReceivers = async () => {
-    // Đếm số lần xuất hiện của user_id trong bảng kudos_receivers
     const { data: allReceivers, error } = await supabase.from('kudos_receivers').select('user_id');
-    
     if (!error && allReceivers) {
         const counts = allReceivers.reduce((acc, curr) => {
             acc[curr.user_id] = (acc[curr.user_id] || 0) + 1;
             return acc;
         }, {});
-
-        // Lấy top 3 ID có số lượng nhận nhiều nhất
         const topIds = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 3);
-        
-        // Gọi hàm xử lý chung để lấy thông tin profile và set state
         processLeaderboard(topIds, counts, setRealTopReceivers, 'received');
     }
   };
 
-  // Hàm phụ trợ để xử lý logic lấy profile và map dữ liệu cho cả Giver và Receiver
   const processLeaderboard = async (topIds, counts, setState, typeLabel) => {
       if (topIds.length > 0) {
           const { data: profiles } = await supabase.from('profiles').select('id, full_name, avatar_url').in('id', topIds);
@@ -82,29 +80,31 @@ const RightSidebar = ({ currentUser }) => {
 
   // --- USE EFFECT ---
   useEffect(() => {
-    fetchTopGivers();
-    fetchTopReceivers(); // [NEW] Gọi hàm fetch receiver
+    // Chỉ chạy khi đã có currentUser từ context
     if (currentUser) {
-        fetchUserStats(currentUser.id);
+        fetchUserStats();
+        fetchTopGivers();
+        fetchTopReceivers();
+
+        // Realtime Subscription
+        const channel = supabase
+        .channel('right_sidebar_realtime')
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kudos' }, () => {
+            fetchTopGivers();
+        })
+        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kudos_receivers' }, () => {
+            fetchTopReceivers();
+            fetchUserStats(); // Update stats của mình ngay lập tức
+        })
+        .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }
+  }, [currentUser]); // Phụ thuộc vào currentUser từ context
 
-    const channel = supabase
-      .channel('right_sidebar_realtime')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kudos' }, () => {
-          fetchTopGivers(); // Update Givers khi có bài mới
-      })
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kudos_receivers' }, () => {
-          fetchTopReceivers(); // [NEW] Update Receivers khi có người nhận mới
-          if (currentUser) fetchUserStats(currentUser.id); // Update stats của mình
-      })
-      .subscribe();
-
-    return () => {
-        supabase.removeChannel(channel);
-    };
-  }, [currentUser]);
-
-  // Component hiển thị danh sách xếp hạng để tái sử dụng
+  // Component con (giữ nguyên)
   const LeaderboardList = ({ title, data, icon: Icon }) => (
     <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
@@ -143,9 +143,7 @@ const RightSidebar = ({ currentUser }) => {
 
   return (
     <aside className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto hidden xl:block sticky top-0 h-screen scrollbar-hide">
-       {/* PHẦN YOUR IMPACT */}
        <Card className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white mb-8 shadow-xl border-none rounded-3xl overflow-hidden relative">
-           {/* Thêm chút họa tiết nền cho đẹp */}
            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
            <CardContent className="p-6 relative z-10">
                <h3 className="text-xs font-bold uppercase opacity-80 tracking-wider mb-1">Total Kudos Received</h3>
@@ -159,13 +157,9 @@ const RightSidebar = ({ currentUser }) => {
            </CardContent>
        </Card>
 
-       {/* PHẦN TOP GIVERS */}
        <LeaderboardList title="Top Givers" data={realTopGivers} icon={Gift} />
-
-       {/* PHẦN TOP RECEIVERS [NEW] */}
        <LeaderboardList title="Top Receivers" data={realTopReceivers} icon={TrendingUp} />
        
-       {/* Trending Tags */}
        <div className="pt-4 border-t border-gray-100">
             <h3 className="font-bold text-gray-900 mb-4 text-sm uppercase tracking-wide text-gray-400">Trending Now</h3>
             <div className="flex flex-wrap gap-2">

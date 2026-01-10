@@ -1,4 +1,5 @@
 "use client"
+
 import React, { useState, useRef } from 'react';
 import { AtSign, Hash, Image as ImageIcon, X, Sparkles, Check } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -8,6 +9,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/client';
+
+// IMPORT CONTEXT HOOKS
+import { useUser } from '@/context/UserContext';
+import { useKudos } from '@/context/KudosContext';
 
 const predefinedTags = ['Excellent', 'Brilliant', 'TeamWork', 'LifeSaver', 'DataWizard', 'ProblemSolver', 'Creative', 'Leadership', 'Innovative'];
 
@@ -29,9 +34,14 @@ const getTagColorClass = (tag) => {
     return colors[index];
 };
 
-const CreateKudos = ({ currentUser, onSuccess }) => {
+// Không cần nhận props từ cha nữa
+const CreateKudos = () => {
     const supabase = createClient();
     const fileInputRef = useRef(null);
+    
+    // Lấy dữ liệu từ Context
+    const { user: currentUser } = useUser();
+    const { addNewPost } = useKudos(); 
   
     const [message, setMessage] = useState('');
     const [selectedReceivers, setSelectedReceivers] = useState([]);
@@ -78,6 +88,7 @@ const CreateKudos = ({ currentUser, onSuccess }) => {
     };
 
     const handleSubmit = async () => {
+        if (!currentUser) return alert("Vui lòng đăng nhập!");
         if ((!message.trim() && selectedFiles.length === 0) || selectedReceivers.length === 0) {
             return alert('Vui lòng chọn người nhận và nội dung!');
         }
@@ -87,7 +98,7 @@ const CreateKudos = ({ currentUser, onSuccess }) => {
             
             // 1. Insert Kudos
             const { data: newKudos, error } = await supabase.from('kudos').insert([{
-                sender_id: currentUser?.id,
+                sender_id: currentUser.id,
                 receiver_id: selectedReceivers[0].id, 
                 message: message,
                 tags: selectedTags,
@@ -104,7 +115,7 @@ const CreateKudos = ({ currentUser, onSuccess }) => {
             const notificationsData = selectedReceivers.map(receiver => ({
                 recipient_id: receiver.id,
                 sender_id: currentUser.id,
-                type: 'mention',
+                type: 'kudos', // Sửa 'mention' thành 'kudos' cho đúng ngữ cảnh bài đăng
                 resource_id: newKudos.id,
                 is_read: false
             }));
@@ -113,8 +124,15 @@ const CreateKudos = ({ currentUser, onSuccess }) => {
                 await supabase.from('notifications').insert(notificationsData);
             }
 
-            setMessage(''); setSelectedReceivers([]); setSelectedTags([]); setSelectedFiles([]); setPreviewUrls([]);
-            if(onSuccess) onSuccess();
+            // Reset form
+            setMessage(''); 
+            setSelectedReceivers([]); 
+            setSelectedTags([]); 
+            setSelectedFiles([]); 
+            setPreviewUrls([]);
+            
+            // Gọi hàm cập nhật feed từ Context
+            addNewPost(); 
 
         } catch (e) { alert('Lỗi: ' + e.message); } 
         finally { setIsSubmitting(false); }

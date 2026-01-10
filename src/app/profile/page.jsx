@@ -1,26 +1,21 @@
 "use client"
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  Users, Search, Bell, Download, Upload, Flame, 
+  Search, Download, Upload, Flame, 
   MapPin, Briefcase, X, Loader2, Camera, Edit, Lock, CheckCircle,
   Eye, EyeOff 
 } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { createClient } from '@/lib/supabase/client';
 import PostItem from '@/components/feed/PostItem'; 
-import { formatDistanceToNow } from 'date-fns';
-import { vi } from 'date-fns/locale';
+import NotificationList from '@/components/common/NotificationList'; // <--- IMPORT
+import { useUser } from '@/context/UserContext'; // <--- IMPORT
 
 const ProfilePage = () => {
-  const router = useRouter();
   const supabase = createClient();
   
-  // --- STATE ---
-  const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
+  // 1. LẤY USER TỪ CONTEXT
+  const { user, profile, isLoading: isLoadingUser, refreshProfile } = useUser();
   
   // Stats & Feed
   const [stats, setStats] = useState({ received: 0, given: 0, streak: 0 });
@@ -42,81 +37,23 @@ const ProfilePage = () => {
   const [loadingPass, setLoadingPass] = useState(false);
   const [showPassword, setShowPassword] = useState({ current: false, new: false, confirm: false });
 
-  // Notifications
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const notificationRef = useRef(null);
-
   const toggleShow = (field) => setShowPassword(prev => ({ ...prev, [field]: !prev[field] }));
 
-  // --- 1. INITIAL FETCH ---
+  // --- 2. SET DATA KHI PROFILE ĐÃ LOAD ---
   useEffect(() => {
-    const getProfile = async () => {
-      try {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          setUser(user);
-          const { data } = await supabase.from('profiles').select('*').eq('id', user.id).single();
-          if (data) {
-            setProfile(data);
-            setFormData({
-              full_name: data.full_name || '',
-              job_title: data.job_title || '',
-              department: data.department || '',
-              location: data.location || '',
-              bio: data.bio || '',
-              avatar_url: data.avatar_url || ''
-            });
-            fetchNotifications(user.id);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading profile:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-    getProfile();
-
-    const handleClickOutside = (event) => {
-      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
-        setShowNotifications(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
-
-  // --- 2. NOTIFICATIONS LOGIC ---
-  const fetchNotifications = async (userId) => {
-    const { data } = await supabase.from('notifications')
-        .select(`*, sender:sender_id(full_name, avatar_url)`)
-        .eq('recipient_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(10);
-    if (data) {
-        setNotifications(data);
-        setUnreadCount(data.filter(n => !n.is_read).length);
+    if (profile) {
+      setFormData({
+        full_name: profile.full_name || '',
+        job_title: profile.job_title || '',
+        department: profile.department || '',
+        location: profile.location || '',
+        bio: profile.bio || '',
+        avatar_url: profile.avatar_url || ''
+      });
     }
-  };
+  }, [profile]);
 
-  const handleToggleNotifications = async () => {
-    const newState = !showNotifications;
-    setShowNotifications(newState);
-    if (newState && unreadCount > 0 && user) {
-        setUnreadCount(0);
-        setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
-        await supabase.from('notifications').update({ is_read: true }).eq('recipient_id', user.id).eq('is_read', false);
-    }
-  };
-
-  const handleNotificationClick = (notif) => {
-    setShowNotifications(false);
-    router.push(`/#post-${notif.resource_id}`);
-  };
-
-  // --- 3. STATS LOGIC ---
+  // --- 3. STATS LOGIC (Giữ nguyên vì là logic riêng của trang Profile) ---
   useEffect(() => {
     if (!user) return;
     const calculateStats = async () => {
@@ -144,7 +81,7 @@ const ProfilePage = () => {
     calculateStats();
   }, [user]);
 
-  // --- 4. FEED LOGIC ---
+  // --- 4. FEED LOGIC (Giữ nguyên vì logic filter theo Tab khác với trang chủ) ---
   useEffect(() => {
     if (!user) return;
     const fetchPosts = async () => {
@@ -205,7 +142,10 @@ const ProfilePage = () => {
       };
       const { error } = await supabase.from('profiles').upsert(updates);
       if (error) throw error;
-      setProfile(updates); setFormData(prev => ({ ...prev, avatar_url: avatarUrl }));
+      
+      // Gọi refresh từ Context để cập nhật toàn app
+      await refreshProfile();
+      
       setIsEditing(false); setAvatarFile(null); alert("Cập nhật thành công!");
     } catch (error) { alert('Lỗi cập nhật: ' + error.message); } finally { setIsSaving(false); }
   };
@@ -227,7 +167,7 @@ const ProfilePage = () => {
     } catch (error) { alert(error.message || "Lỗi đổi mật khẩu"); } finally { setLoadingPass(false); }
   };
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" /></div>;
+  if (isLoadingUser) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" /></div>;
 
   return (
     <div className="min-h-screen bg-gray-50/50 pb-20">
@@ -265,80 +205,20 @@ const ProfilePage = () => {
         </div>
        )}
 
-       {/* HEADER (UPDATED DESIGN) */}
+       {/* HEADER */}
        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-40">
          <div className="px-4 sm:px-6 lg:px-8">
            <div className="flex h-16 items-center justify-between">
-             {/* Left: Title */}
-             <div className="flex items-center gap-3">
-                <h2 className="text-xl font-bold text-gray-800">My Profile</h2>
-             </div>
-
-             {/* Right: Search & Notifications */}
+             <div className="flex items-center gap-3"><h2 className="text-xl font-bold text-gray-800">My Profile</h2></div>
              <div className="flex items-center gap-4 ml-auto">
-               
-               {/* Search Bar */}
                <div className="relative hidden sm:block group">
                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                 <input 
-                    type="text" 
-                    placeholder="Search..." 
-                    className="pl-10 pr-4 h-10 w-48 lg:w-72 bg-gray-50/50 border border-gray-200 rounded-full text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all" 
-                 />
+                 <input type="text" placeholder="Search..." className="pl-10 pr-4 h-10 w-48 lg:w-72 bg-gray-50/50 border border-gray-200 rounded-full text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all" />
                </div>
                
-               {/* Notification Bell */}
-               <div className="relative" ref={notificationRef}>
-                  <button 
-                    onClick={handleToggleNotifications}
-                    className={`relative h-10 w-10 flex items-center justify-center rounded-full transition-all focus:outline-none 
-                        ${showNotifications ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
-                    `}
-                  >
-                    <Bell className="w-5 h-5" />
-                    {unreadCount > 0 && (
-                      <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
-                    )}
-                  </button>
-
-                  {/* Notification Popup */}
-                  {showNotifications && (
-                    <div className="absolute right-0 mt-3 w-80 sm:w-96 bg-white rounded-xl shadow-xl border border-gray-100 overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 origin-top-right">
-                      <div className="p-4 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
-                        <h3 className="font-semibold text-sm text-gray-900">Notifications</h3>
-                        <span className="text-xs text-blue-600 hover:text-blue-700 font-medium cursor-pointer">Mark all read</span>
-                      </div>
-                      <div className="max-h-[350px] overflow-y-auto">
-                        {notifications.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center py-10 text-gray-400">
-                             <Bell className="w-8 h-8 mb-2 opacity-20"/>
-                             <p className="text-sm">No new notifications</p>
-                          </div>
-                        ) : (
-                          notifications.map((notif) => (
-                            <div key={notif.id} onClick={() => handleNotificationClick(notif)} className={`p-4 flex gap-3 hover:bg-gray-50 cursor-pointer border-b border-gray-50 last:border-0 transition-colors ${!notif.is_read ? 'bg-blue-50/40' : ''}`}>
-                              <Avatar className="w-10 h-10 border border-gray-100 shrink-0">
-                                <AvatarImage src={notif.sender?.avatar_url} />
-                                <AvatarFallback>U</AvatarFallback>
-                              </Avatar>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm text-gray-800 line-clamp-2 leading-snug">
-                                  <span className="font-bold text-gray-900">{notif.sender?.full_name}</span> 
-                                  {notif.type === 'kudos' && <span className="text-gray-600"> sent you a <span className="text-blue-600 font-medium">kudos</span>! 🎉</span>}
-                                  {notif.type === 'reaction' && <span className="text-gray-600"> reacted to your post.</span>}
-                                  {notif.type === 'comment' && <span className="text-gray-600"> commented on your post.</span>}
-                                  {notif.type === 'mention' && <span className="text-gray-600"> mentioned you.</span>}
-                                </p>
-                                <p className="text-xs text-gray-400 mt-1">{formatDistanceToNow(new Date(notif.created_at), { locale: vi, addSuffix: true })}</p>
-                              </div>
-                              {!notif.is_read && <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 shrink-0"></div>}
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  )}
-               </div>
+               {/* SỬ DỤNG COMPONENT NOTIFICATION LIST */}
+               <NotificationList  />
+               
              </div>
            </div>
          </div>
@@ -446,7 +326,7 @@ const ProfilePage = () => {
                                 <PostItem 
                                     key={item.id} 
                                     post={item} 
-                                    currentUser={user}
+                                    // Không cần truyền currentUser vì PostItem tự lấy từ context
                                     onDelete={(id) => setPosts(posts.filter(p => p.id !== id))}
                                     onUpdate={(updatedPost) => setPosts(posts.map(p => p.id === updatedPost.id ? updatedPost : p))}
                                     onImageClick={(img) => window.open(img, '_blank')}

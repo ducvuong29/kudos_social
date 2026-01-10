@@ -2,31 +2,25 @@
 
 import React, { useState, useEffect } from 'react';
 import { 
-  TrendingUp, TrendingDown, Minus, Search, Trophy, 
-  ChevronDown, Gift, Medal, Filter, Loader2 
+  TrendingUp, TrendingDown, Minus, Search, 
+  Gift, Medal, Loader2 
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client'; // Đảm bảo đường dẫn đúng
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'; // Tận dụng component có sẵn
+import { createClient } from '@/lib/supabase/client';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import NotificationList from '@/components/common/NotificationList'; // <--- Import component thông báo
+import { useUser } from '@/context/UserContext'; // <--- Import UserContext
 
 const LeaderboardPage = () => {
   const supabase = createClient();
+  const { user: currentUser } = useUser(); // Lấy user từ Context
+
   const [timeFilter, setTimeFilter] = useState('week'); // 'week' | 'month' | 'all'
   const [leaderboardType, setLeaderboardType] = useState('receivers'); // 'receivers' | 'givers'
   
   const [leaderboardData, setLeaderboardData] = useState({ topThree: [], others: [] });
   const [isLoading, setIsLoading] = useState(true);
-  const [currentUser, setCurrentUser] = useState(null);
 
-  // 1. Lấy thông tin user hiện tại
-  useEffect(() => {
-    const getUser = async () => {
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) setCurrentUser(user);
-    };
-    getUser();
-  }, []);
-
-  // 2. Fetch và Xử lý dữ liệu Leaderboard
+  // --- 1. Fetch và Xử lý dữ liệu Leaderboard ---
   useEffect(() => {
     const fetchLeaderboard = async () => {
       setIsLoading(true);
@@ -35,29 +29,23 @@ const LeaderboardPage = () => {
         let startTime = new Date();
         if (timeFilter === 'week') startTime.setDate(startTime.getDate() - 7);
         if (timeFilter === 'month') startTime.setMonth(startTime.getMonth() - 1);
-        if (timeFilter === 'all') startTime = new Date(0); // Từ đầu
+        if (timeFilter === 'all') startTime = new Date(0); 
 
-        let scores = {}; // Object để đếm điểm: { 'user_id': count }
+        let scores = {}; 
 
-        // B. Query dữ liệu tùy theo Type (Givers hay Receivers)
+        // B. Query dữ liệu tùy theo Type
         if (leaderboardType === 'givers') {
-            // Đếm ai TẶNG nhiều nhất -> Query bảng 'kudos'
             const { data, error } = await supabase
                 .from('kudos')
                 .select('sender_id')
                 .gte('created_at', startTime.toISOString());
             
             if (error) throw error;
-
-            // Gộp data
             data.forEach(item => {
                 scores[item.sender_id] = (scores[item.sender_id] || 0) + 1;
             });
 
         } else {
-            // Đếm ai NHẬN nhiều nhất -> Query bảng trung gian 'kudos_receivers' (hoặc bảng nhận tùy DB của bạn)
-            // Giả sử bạn có bảng 'kudos_receivers' lưu (kudos_id, user_id)
-            // Cần filter theo thời gian của bảng 'kudos' cha, nên cần join
             const { data, error } = await supabase
                 .from('kudos_receivers')
                 .select(`
@@ -68,31 +56,28 @@ const LeaderboardPage = () => {
 
             if (error) throw error;
             
-            // Gộp data (Lọc bỏ những record null do điều kiện thời gian của inner join)
             data.forEach(item => {
-                if(item.kudos) { // Chỉ đếm nếu kudos tồn tại trong khoảng thời gian
+                if(item.kudos) { 
                     scores[item.user_id] = (scores[item.user_id] || 0) + 1;
                 }
             });
         }
 
-        // C. Lấy thông tin chi tiết User (Name, Avatar, Dept) từ danh sách ID đã có điểm
+        // C. Lấy thông tin chi tiết User
         const userIds = Object.keys(scores);
         if (userIds.length > 0) {
             const { data: profiles } = await supabase
                 .from('profiles')
-                .select('id, full_name, avatar_url, department, job_title') // Đảm bảo trường department có trong DB
+                .select('id, full_name, avatar_url, department, job_title')
                 .in('id', userIds);
             
-            // Map thông tin profile vào điểm số
             let fullList = profiles.map(profile => ({
                 id: profile.id,
                 name: profile.full_name || 'Unnamed',
                 department: profile.department || 'General',
                 points: scores[profile.id],
                 avatar: profile.avatar_url,
-                // Mock trend vì tính trend thật khá phức tạp (cần query 2 khoảng thời gian)
-                trend: Math.floor(Math.random() * 20) - 5, 
+                trend: Math.floor(Math.random() * 20) - 5, // Mock trend
                 isMe: currentUser?.id === profile.id
             }));
 
@@ -102,10 +87,9 @@ const LeaderboardPage = () => {
             // Đánh thứ hạng (Rank)
             fullList = fullList.map((item, index) => ({ ...item, rank: index + 1 }));
 
-            // Tách Top 3 và phần còn lại
             setLeaderboardData({
-                topThree: fullList.slice(0, 3), // Lấy 3 người đầu
-                others: fullList.slice(3)       // Những người còn lại
+                topThree: fullList.slice(0, 3), 
+                others: fullList.slice(3)       
             });
         } else {
             setLeaderboardData({ topThree: [], others: [] });
@@ -119,7 +103,7 @@ const LeaderboardPage = () => {
     };
 
     fetchLeaderboard();
-  }, [timeFilter, leaderboardType, currentUser]); // Chạy lại khi filter thay đổi
+  }, [timeFilter, leaderboardType, currentUser]); 
 
   // --- HELPER FUNCTIONS ---
   const getTrendIcon = (trend) => {
@@ -138,8 +122,6 @@ const LeaderboardPage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50/50">
-        {/* Đã xóa LeftSidebar static và margin-left (lg:ml-64) */}
-        
         {/* Header Content */}
         <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 sticky top-0 z-30">
           <div className="px-4 sm:px-6 lg:px-8">
@@ -154,15 +136,19 @@ const LeaderboardPage = () => {
                  </span>
               </div>
 
-              <div className="flex items-center gap-3 ml-auto">
-                <div className="relative hidden sm:block">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+              {/* Right Section: Search + Notification */}
+              <div className="flex items-center gap-4 ml-auto">
+                <div className="relative hidden sm:block group">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
                   <input
                     type="text"
                     placeholder="Search..."
-                    className="pl-10 pr-4 py-2 bg-gray-100/50 border border-transparent focus:bg-white focus:border-blue-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 w-48 transition-all"
+                    className="pl-10 pr-4 h-10 w-48 bg-gray-100/50 border border-transparent focus:bg-white focus:border-blue-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 transition-all"
                   />
                 </div>
+
+                {/* --- NOTIFICATION LIST (MỚI THÊM) --- */}
+                <NotificationList  />
               </div>
             </div>
           </div>
@@ -228,10 +214,10 @@ const LeaderboardPage = () => {
                 {/* Top 3 Podium */}
                 {leaderboardData.topThree.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-8 mb-12 items-end">
-                    {/* Re-order array to display: 2 - 1 - 3 logic visually */}
+                    {/* Logic sắp xếp: Hạng 2 - Hạng 1 - Hạng 3 */}
                     {[leaderboardData.topThree[1], leaderboardData.topThree[0], leaderboardData.topThree[2]]
-                     .filter(Boolean) // Filter undefined if less than 3 people
-                     .map((person) => (
+                      .filter(Boolean)
+                      .map((person) => (
                     <div
                         key={person.id}
                         className={`relative group ${
