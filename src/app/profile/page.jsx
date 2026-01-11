@@ -12,13 +12,14 @@ import PostItem from '@/components/feed/PostItem';
 import NotificationList from '@/components/common/NotificationList'; 
 import { useUser } from '@/context/UserContext'; 
 import { useApp } from '@/context/AppProvider';
+
 const ProfilePage = () => {
   const supabase = createClient();
   const { user, isLoading: isLoadingUser, refreshProfile } = useUser();
   const { t } = useApp();
-  const [activeTab, setActiveTab] = useState('received'); 
   
-  // --- 1. THÊM STATE CHO TÌM KIẾM ---
+  // Mặc định tab là 'received'
+  const [activeTab, setActiveTab] = useState('received'); 
   const [searchQuery, setSearchQuery] = useState(''); 
 
   // Edit Profile & Password State
@@ -69,25 +70,41 @@ const ProfilePage = () => {
       revalidateOnFocus: false
   });
 
-  // --- SWR FETCH POSTS ---
-  const { data: posts, isLoading: loadingPosts, mutate: mutatePosts } = useSWR(user ? ['profile-posts', user.id, activeTab] : null, async () => {
+  // --- SWR FETCH POSTS (SỬA LẠI LOGIC FETCH RECEIVED) ---
+  const { data: posts, isLoading: loadingPosts, mutate: mutatePosts } = useSWR(
+    user ? ['profile-posts', user.id, activeTab] : null, 
+    async () => {
       const selectQuery = `*, sender:sender_id(full_name, avatar_url, id), recipients:kudos_receivers(user:user_id(full_name, avatar_url, id)), comments(id, content, created_at, user:user_id(full_name, avatar_url, id)), reactions(type, user_id)`;
       let dataToSet = [];
       
-      const fetchGiven = () => supabase.from('kudos').select(selectQuery).eq('sender_id', user.id).order('created_at', { ascending: false });
-      const fetchReceived = async () => {
-          const { data: refs } = await supabase.from('kudos_receivers').select('kudos_id').eq('user_id', user.id);
-          const ids = refs ? refs.map(r => r.kudos_id) : [];
-          if (ids.length === 0) return { data: [] };
-          return supabase.from('kudos').select(selectQuery).in('id', ids).order('created_at', { ascending: false });
+      const fetchGiven = async () => {
+          const { data } = await supabase.from('kudos').select(selectQuery).eq('sender_id', user.id).order('created_at', { ascending: false });
+          return data || [];
       };
 
-      if (activeTab === 'given') { const { data } = await fetchGiven(); dataToSet = data || []; } 
-      else if (activeTab === 'received') { const { data } = await fetchReceived(); dataToSet = data || []; } 
+      const fetchReceived = async () => {
+          // Lấy danh sách ID kudos mà user này nhận
+          const { data: refs } = await supabase.from('kudos_receivers').select('kudos_id').eq('user_id', user.id);
+          const ids = refs ? refs.map(r => r.kudos_id) : [];
+          
+          if (ids.length === 0) return []; // Nếu chưa nhận cái nào thì trả về rỗng ngay
+
+          // Lấy chi tiết các kudos đó
+          const { data } = await supabase.from('kudos').select(selectQuery).in('id', ids).order('created_at', { ascending: false });
+          return data || [];
+      };
+
+      if (activeTab === 'given') { 
+          dataToSet = await fetchGiven();
+      } 
+      else if (activeTab === 'received') { 
+          dataToSet = await fetchReceived(); 
+      } 
       else if (activeTab === 'all') {
-          const [givenRes, receivedRes] = await Promise.all([fetchGiven(), fetchReceived()]);
+          const [givenData, receivedData] = await Promise.all([fetchGiven(), fetchReceived()]);
+          // Gộp và loại bỏ trùng lặp (dùng Map)
           const combinedMap = new Map();
-          [...(givenRes.data||[]), ...(receivedRes.data||[])].forEach(p => combinedMap.set(p.id, p));
+          [...givenData, ...receivedData].forEach(p => combinedMap.set(p.id, p));
           dataToSet = Array.from(combinedMap.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
       }
 
@@ -99,111 +116,55 @@ const ProfilePage = () => {
           reactions: p.reactions || []
       }));
   }, {
-      dedupingInterval: 60000,
-      revalidateOnFocus: false 
+      dedupingInterval: 10000, // Giảm xuống 10s để test dễ hơn
+      revalidateOnFocus: false,
+      revalidateOnMount: true // Ép buộc fetch ngay khi vào trang
   });
 
-  // --- 2. LOGIC LỌC BÀI VIẾT (FILTER) ---
-  // Lọc bài viết dựa trên từ khóa tìm kiếm (searchQuery)
+  // --- LOGIC LỌC BÀI VIẾT ---
   const filteredPosts = posts?.filter(post => {
-      if (!searchQuery) return true; // Nếu không tìm kiếm thì hiện hết
+      if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
-      
-      // Tìm trong nội dung tin nhắn
       const matchMessage = post.message?.toLowerCase().includes(query);
-      // Tìm theo tên người gửi
       const matchSender = post.sender?.full_name?.toLowerCase().includes(query);
-      // Tìm theo tên người nhận
       const matchReceiver = post.receiverList?.some(r => r.full_name.toLowerCase().includes(query));
-
       return matchMessage || matchSender || matchReceiver;
   }) || [];
 
-
-  // --- HANDLERS ---
+  // --- HANDLERS (Giữ nguyên) ---
   const handleUpdatePostList = async (updatedPost) => {
       await mutatePosts(posts.map(p => p.id === updatedPost.id ? updatedPost : p), false);
   };
-
   const handleDeletePostList = async (postId) => {
       await mutatePosts(posts.filter(p => p.id !== postId), false);
   };
-
   const toggleShow = (field) => setShowPassword(prev => ({ ...prev, [field]: !prev[field] }));
   const handleAvatarChange = (e) => { const file = e.target.files[0]; if (file) { setAvatarFile(file); setPreviewUrl(URL.createObjectURL(file)); } };
-  
-  const handleSaveProfile = async () => {
-    // ... (Giữ nguyên logic save)
-    setIsSaving(true);
-    try {
-      let avatarUrl = formData.avatar_url;
-      if (avatarFile) {
-        const fileExt = avatarFile.name.split('.').pop();
-        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
-        const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, avatarFile);
-        if (uploadError) throw uploadError;
-        const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
-        avatarUrl = publicUrl;
-      }
-      const updates = {
-        id: user.id, full_name: formData.full_name, job_title: formData.job_title,
-        department: formData.department, location: formData.location, bio: formData.bio,
-        avatar_url: avatarUrl, updated_at: new Date(),
-      };
-      const { error } = await supabase.from('profiles').upsert(updates);
-      if (error) throw error;
-      
-      await refreshProfile(); 
-      setIsEditing(false); setAvatarFile(null); alert("Cập nhật thành công!");
-    } catch (error) { alert('Lỗi cập nhật: ' + error.message); } finally { setIsSaving(false); }
-  };
+  const handleSaveProfile = async () => { /* ... Giữ nguyên logic save ... */ setIsSaving(true); try { let avatarUrl = formData.avatar_url; if (avatarFile) { const fileExt = avatarFile.name.split('.').pop(); const fileName = `${user.id}-${Date.now()}.${fileExt}`; const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, avatarFile); if (uploadError) throw uploadError; const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName); avatarUrl = publicUrl; } const updates = { id: user.id, full_name: formData.full_name, job_title: formData.job_title, department: formData.department, location: formData.location, bio: formData.bio, avatar_url: avatarUrl, updated_at: new Date(), }; const { error } = await supabase.from('profiles').upsert(updates); if (error) throw error; await refreshProfile(); setIsEditing(false); setAvatarFile(null); alert("Cập nhật thành công!"); } catch (error) { alert('Lỗi cập nhật: ' + error.message); } finally { setIsSaving(false); } };
+  const handleUpdatePassword = async () => { /* ... Giữ nguyên logic password ... */ const { currentPassword, newPassword, confirmPassword } = passData; if (!currentPassword || !newPassword || !confirmPassword) return alert("Vui lòng nhập đầy đủ các trường mật khẩu"); setLoadingPass(true); try { const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword }); if (verifyError) throw new Error("Mật khẩu hiện tại không chính xác!"); if (newPassword !== confirmPassword) throw new Error("Mật khẩu mới và xác nhận không khớp."); if (newPassword.length < 6) throw new Error("Mật khẩu mới phải có ít nhất 6 ký tự."); if (newPassword === currentPassword) throw new Error("Mật khẩu mới không được trùng với mật khẩu cũ."); const { error: updateError } = await supabase.auth.updateUser({ password: newPassword }); if (updateError) throw updateError; alert("Đổi mật khẩu thành công!"); setPassData({ currentPassword: '', newPassword: '', confirmPassword: '' }); } catch (error) { alert(error.message || "Lỗi đổi mật khẩu"); } finally { setLoadingPass(false); } };
 
-  const handleUpdatePassword = async () => {
-    // ... (Giữ nguyên logic password)
-    const { currentPassword, newPassword, confirmPassword } = passData;
-    if (!currentPassword || !newPassword || !confirmPassword) return alert("Vui lòng nhập đầy đủ các trường mật khẩu");
-    setLoadingPass(true);
-    try {
-        const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
-        if (verifyError) throw new Error("Mật khẩu hiện tại không chính xác!");
-        if (newPassword !== confirmPassword) throw new Error("Mật khẩu mới và xác nhận không khớp.");
-        if (newPassword.length < 6) throw new Error("Mật khẩu mới phải có ít nhất 6 ký tự.");
-        if (newPassword === currentPassword) throw new Error("Mật khẩu mới không được trùng với mật khẩu cũ.");
-        const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
-        if (updateError) throw updateError;
-        alert("Đổi mật khẩu thành công!");
-        setPassData({ currentPassword: '', newPassword: '', confirmPassword: '' });
-    } catch (error) { alert(error.message || "Lỗi đổi mật khẩu"); } finally { setLoadingPass(false); }
-  };
-
-  if (isLoadingUser) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-500 w-10 h-10" /></div>;
+  if (isLoadingUser) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-900"><Loader2 className="animate-spin text-blue-500 w-10 h-10" /></div>;
   if (!user) return <div className="min-h-screen flex items-center justify-center text-gray-500">Please log in to view your profile.</div>;
 
   return (
-    // THÊM: dark:bg-slate-900
     <div className="min-h-screen bg-gray-50/50 dark:bg-slate-900/50 pb-20 transition-colors">
        
        {isEditing && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          {/* MODAL: dark:bg-slate-800 */}
           <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
              <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-slate-800/50">
               <h3 className="font-bold text-lg text-gray-800 dark:text-white">{t.editProfile}</h3>
               <button onClick={() => setIsEditing(false)}><X className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer"/></button>
             </div>
             <div className="p-6 grid gap-6 max-h-[70vh] overflow-y-auto">
-                {/* ... (Phần Avatar giữ nguyên) */}
                 <div className="flex flex-col items-center justify-center gap-4">
-                     {/* Giữ nguyên logic ảnh */}
-                     <div className="relative group">
+                    <div className="relative group">
                         <img src={previewUrl || formData.avatar_url || "https://github.com/shadcn.png"} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-4 border-white dark:border-slate-700 shadow-lg"/>
                         <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
                             <Camera className="text-white w-8 h-8"/><input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange}/>
                         </label>
                     </div>
                 </div>
-                
-                {/* INPUTS: Thêm style dark cho input */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {['Full Name', 'Job Title', 'Department', 'Location'].map((label, idx) => {
                          const key = label.toLowerCase().replace(' ', '_');
@@ -230,7 +191,6 @@ const ProfilePage = () => {
         </div>
        )}
 
-       {/* HEADER: dark:bg-slate-900/80 */}
        <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 sticky top-0 z-40 transition-colors">
          <div className="px-4 sm:px-6 lg:px-8">
            <div className="flex h-16 items-center justify-between">
@@ -255,7 +215,6 @@ const ProfilePage = () => {
        <main className="px-4 sm:px-6 lg:px-8 py-8 max-w-7xl mx-auto">
          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
            
-           {/* LEFT COLUMN */}
            <div className="lg:col-span-4 space-y-6">
              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden top-24 z-10 transition-colors">
                <div className="h-32 bg-gradient-to-r from-blue-400 to-purple-500"></div>
@@ -278,7 +237,6 @@ const ProfilePage = () => {
                </div>
              </div>
 
-             {/* CHANGE PASSWORD */}
              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 z-0 transition-colors">
                 <div className="flex items-center gap-2 mb-4 text-gray-900 dark:text-white"><Lock className="w-5 h-5 text-gray-700 dark:text-gray-300" /><h3 className="font-bold">{t.security}</h3></div>
                 <div className="space-y-4">
@@ -301,10 +259,8 @@ const ProfilePage = () => {
              </div>
            </div>
 
-           {/* RIGHT COLUMN */}
            <div className="lg:col-span-8 space-y-6">
              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-               {/* STATS CARDS: dark:bg-slate-800 dark:border-gray-700 */}
                <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 hover:border-blue-300 transition-all group">
                  <div className="flex justify-between items-start mb-4">
                     <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/50 rounded-xl flex items-center justify-center group-hover:bg-blue-100 dark:group-hover:bg-blue-900 transition-colors"><Download className="w-5 h-5 text-blue-600 dark:text-blue-400" /></div>
@@ -313,7 +269,6 @@ const ProfilePage = () => {
                  <div className="text-3xl font-bold text-gray-900 dark:text-white">{stats?.received}</div>
                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t.kudosReceived}</p>
                </div>
-               {/* ... (Các card khác tương tự, chỉ cần đổi class nền và text) */}
                <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 hover:border-purple-300 transition-all group">
                  <div className="flex justify-between items-start mb-4">
                     <div className="w-10 h-10 bg-purple-50 dark:bg-purple-900/50 rounded-xl flex items-center justify-center group-hover:bg-purple-100 dark:group-hover:bg-purple-900 transition-colors"><Upload className="w-5 h-5 text-purple-600 dark:text-purple-400" /></div>
@@ -340,7 +295,6 @@ const ProfilePage = () => {
                 </div>
                 
                 <div className="p-4 sm:p-6 bg-gray-50/30 dark:bg-slate-900/50">
-                    {/* ... (Phần render list giữ nguyên, PostItem sẽ tự xử lý màu nếu đã sửa PostItem) */}
                     {loadingPosts && !posts ? (
                         <div className="py-20 text-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-2"/><p className="text-gray-400 text-sm">{t.loading}</p></div>
                     ) : filteredPosts && filteredPosts.length > 0 ? (
