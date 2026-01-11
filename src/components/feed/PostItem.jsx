@@ -14,7 +14,7 @@ import { vi } from 'date-fns/locale';
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
 import { useUser } from '@/context/UserContext'; 
-
+import { useApp } from '@/context/AppProvider';
 // --- CONSTANTS ---
 const REACTION_TYPES = [
   { id: 'like', emoji: '👍', label: 'Like', color: 'text-blue-600' },
@@ -47,7 +47,7 @@ const triggerConfetti = () => {
 const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   const supabase = createClient();
   const { user: currentUser } = useUser(); 
-
+const { t } = useApp();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editMessage, setEditMessage] = useState(post.message);
@@ -173,10 +173,11 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   };
 
   return (
-    <Card id={`post-${post.id}`} className="border-none shadow-sm hover:shadow-lg transition-shadow duration-300 bg-white rounded-3xl overflow-visible">
+    // CARD: dark:bg-slate-800
+    <Card id={`post-${post.id}`} className="border-none shadow-sm hover:shadow-lg transition-shadow duration-300 bg-white dark:bg-slate-800 rounded-3xl overflow-visible transition-colors">
       <CardContent className="p-8">
         <div className="flex gap-5">
-          <Avatar className="w-12 h-12 border border-gray-100">
+          <Avatar className="w-12 h-12 border border-gray-100 dark:border-slate-700">
             <AvatarImage src={post.sender?.avatar_url}/>
             <AvatarFallback>{post.sender?.full_name?.charAt(0) || 'U'}</AvatarFallback>
           </Avatar>
@@ -185,23 +186,23 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
             {/* Header Post */}
             <div className="flex justify-between mb-3 items-start relative">
                <div>
-                  <p className="text-base text-gray-900 leading-snug">
+                  <p className="text-base text-gray-900 dark:text-white leading-snug">
                      <span className="font-bold text-lg">{post.sender?.full_name}</span> 
-                     <span className="text-gray-400 mx-1">sent kudos to</span> 
+                     <span className="text-gray-400 dark:text-gray-500 mx-1">{t.sentKudosTo}</span> 
                      {renderRecipients(post.receiverList)}
                   </p>
-                  <p className="text-sm text-gray-400 mt-1">{formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}</p>
+                  <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">{formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}</p>
                </div>
                <div className="flex items-center gap-2">
                   {post.tags?.[0] && <Badge className={`border-none px-3 py-1 text-sm ${getTagColor(post.tags[0])}`}>{post.tags[0]}</Badge>}
                   
                   {currentUser?.id === post.sender?.id && (
                     <div className="relative">
-                        <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-full cursor-pointer" onClick={() => setIsMenuOpen(!isMenuOpen)}><MoreHorizontal size={20}/></button>
+                        <button className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full cursor-pointer" onClick={() => setIsMenuOpen(!isMenuOpen)}><MoreHorizontal size={20}/></button>
                         {isMenuOpen && (
-                          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
-                             <button onClick={() => {setIsEditing(true); setIsMenuOpen(false)}} className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-blue-50 text-blue-600 transition-colors cursor-pointer"><Edit2 size={14}/> Edit</button>
-                             <button onClick={() => handleDeletePost()} className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-red-50 text-red-600 transition-colors cursor-pointer"><Trash2 size={14}/> Delete</button>
+                          <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
+                             <button onClick={() => {setIsEditing(true); setIsMenuOpen(false)}} className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-blue-50 dark:hover:bg-slate-800 text-blue-600 transition-colors cursor-pointer"><Edit2 size={14}/> {t.edit}</button>
+                             <button onClick={() => handleDeletePost()} className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-red-50 dark:hover:bg-slate-800 text-red-600 transition-colors cursor-pointer"><Trash2 size={14}/> {t.delete}</button>
                           </div>
                         )}
                     </div>
@@ -212,69 +213,68 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
             {/* Content Post */}
             {isEditing ? (
                <div className="mb-5">
-                  <Textarea value={editMessage} onChange={e => setEditMessage(e.target.value)} className="mb-2 min-h-[100px] text-lg bg-gray-50"/>
+                  <Textarea value={editMessage} onChange={e => setEditMessage(e.target.value)} className="mb-2 min-h-[100px] text-lg bg-gray-50 dark:bg-slate-900 dark:text-white dark:border-slate-700"/>
                   <div className="flex gap-2 justify-end">
-                     <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="cursor-pointer">Cancel</Button>
-                     <Button size="sm" onClick={handleUpdatePost} className="cursor-pointer">Save</Button>
+                     <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)} className="cursor-pointer dark:text-gray-300 dark:hover:bg-slate-700">{t.cancel}</Button>
+                     <Button size="sm" onClick={handleUpdatePost} className="cursor-pointer">{t.save}</Button>
                   </div>
                </div>
             ) : (
-               <p className="text-gray-800 mb-5 whitespace-pre-wrap text-lg leading-relaxed">{post.message}</p>
+               <p className="text-gray-800 dark:text-gray-200 mb-5 whitespace-pre-wrap text-lg leading-relaxed">{post.message}</p>
             )}
 
             {/* Images */}
             {post.image_urls?.length > 0 && (
                <div className={`grid gap-3 mb-5 rounded-2xl overflow-hidden ${post.image_urls.length>1?'grid-cols-2':'grid-cols-1'}`}>
                   {post.image_urls.map((img, i) => (
-                    <div key={i} className="relative aspect-video bg-gray-100 cursor-zoom-in" onClick={() => onImageClick && onImageClick(img)}>
+                    <div key={i} className="relative aspect-video bg-gray-100 dark:bg-slate-900 cursor-zoom-in" onClick={() => onImageClick && onImageClick(img)}>
                        <img src={img} className="absolute inset-0 w-full h-full object-cover hover:scale-105 transition-transform duration-500 cursor-pointer"/>
                     </div>
                   ))}
                </div>
             )}
             
-            {/* Tags */}
             {post.tags?.length > 0 && <div className="flex flex-wrap gap-2 mb-5">{post.tags.map(t=><span key={t} className="text-sm font-medium px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg bg-opacity-50">#{t}</span>)}</div>}
 
             {/* Reactions Stats */}
-            <div className="flex items-center justify-between py-3 border-t border-gray-50">
-               <div className="flex items-center gap-2 text-sm text-gray-500">
-                  {Object.keys(reactionsCount).length > 0 && <div className="flex -space-x-2 mr-1">{Object.keys(reactionsCount).map(type => <div key={type} className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[12px] shadow-sm ring-2 ring-white">{REACTION_TYPES.find(r=>r.id===type)?.emoji}</div>)}</div>}
-                  <span>{post.reactions?.length || 0} reactions</span>
+            <div className="flex items-center justify-between py-3 border-t border-gray-50 dark:border-gray-700">
+               <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                  {Object.keys(reactionsCount).length > 0 && <div className="flex -space-x-2 mr-1">{Object.keys(reactionsCount).map(type => <div key={type} className="w-6 h-6 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center text-[12px] shadow-sm ring-2 ring-white dark:ring-slate-800">{REACTION_TYPES.find(r=>r.id===type)?.emoji}</div>)}</div>}
+                  <span>{post.reactions?.length || 0} {t.reactions}</span>
                </div>
-               <div className="text-sm text-gray-500 cursor-pointer hover:underline" onClick={() => setShowComments(!showComments)}>{post.comments?.length || 0} comments</div>
+               <div className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:underline" onClick={() => setShowComments(!showComments)}>{post.comments?.length || 0} {t.comments}</div>
             </div>
 
             {/* Buttons */}
-            <div className="flex items-center gap-4 pt-3 border-t border-gray-50 relative ">
+            <div className="flex items-center gap-4 pt-3 border-t border-gray-50 dark:border-gray-700 relative ">
                <div className="relative group pb-2">
-                   <button onClick={() => handleReaction(myReaction || 'like')} className={`flex items-center gap-2 px-6 py-2.5 rounded-full cursor-pointer transition-colors ${myReaction ? 'text-blue-600 bg-blue-50' : 'text-gray-500 hover:bg-gray-100'}`}>
+                   <button onClick={() => handleReaction(myReaction || 'like')} className={`flex items-center gap-2 px-6 py-2.5 rounded-full cursor-pointer transition-colors ${myReaction ? 'text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700'}`}>
                        {myReaction ? <span className="text-xl">{REACTION_TYPES.find(r=>r.id===myReaction)?.emoji}</span> : <ThumbsUp size={20}/>}
-                       <span className="font-bold text-sm">{myReaction ? REACTION_TYPES.find(r=>r.id===myReaction)?.label : 'Like'}</span>
+                       <span className="font-bold text-sm">{myReaction ? REACTION_TYPES.find(r=>r.id===myReaction)?.label : t.like}</span>
                    </button>
-                   <div className="absolute bottom-12 left-0 hidden group-hover:flex bg-white p-2 rounded-full shadow-xl gap-2 z-50 border border-gray-100 animate-in slide-in-from-bottom-2 fade-in">
+                   <div className="absolute bottom-12 left-0 hidden group-hover:flex bg-white dark:bg-slate-800 p-2 rounded-full shadow-xl gap-2 z-50 border border-gray-100 dark:border-gray-700 animate-in slide-in-from-bottom-2 fade-in">
                        {REACTION_TYPES.map((r) => <button key={r.id} onClick={(e)=>{e.stopPropagation(); handleReaction(r.id)}} className="p-2 hover:scale-125 transition-transform text-2xl cursor-pointer" title={r.label}>{r.emoji}</button>)}
                    </div>
                </div>
-               <button onClick={() => setShowComments(!showComments)} className="flex items-center gap-2 px-6 py-2.5 rounded-full text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-colors cursor-pointer"><MessageSquare size={20} /> <span className="font-bold text-sm">Comment</span></button>
-               <button className="flex items-center gap-2 px-6 py-2.5 rounded-full text-gray-500 hover:bg-gray-100 ml-auto transition-colors cursor-pointer"><Share2 size={20} /></button>
+               <button onClick={() => setShowComments(!showComments)} className="flex items-center gap-2 px-6 py-2.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-blue-600 transition-colors cursor-pointer"><MessageSquare size={20} /> <span className="font-bold text-sm">{t.comment}</span></button>
+               <button className="flex items-center gap-2 px-6 py-2.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 ml-auto transition-colors cursor-pointer"><Share2 size={20} /></button>
             </div>
 
             {/* Comments Area */}
             <AnimatePresence>
                {showComments && (
-                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-5 bg-gray-50 rounded-2xl p-5">
+                 <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="mt-5 bg-gray-50 dark:bg-slate-900/50 rounded-2xl p-5">
                     {post.comments?.length > 0 && (
                        <div className="space-y-5 mb-5 max-h-96 overflow-y-auto pr-2 custom-scrollbar ">
                           {post.comments.map(comment => (
                              <div key={comment.id} className="flex gap-3 group/comment">
                                 <Avatar className="w-9 h-9 mt-1"><AvatarImage src={comment.user?.avatar_url}/><AvatarFallback>U</AvatarFallback></Avatar>
                                 <div className="flex-1">
-                                   <div className="bg-white p-4 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 relative">
-                                      <p className="text-sm font-bold text-gray-900 mb-1">{comment.user?.full_name}</p>
-                                      <p className="text-sm text-gray-800">{comment.content}</p>
+                                   <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 dark:border-slate-700 relative">
+                                      <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">{comment.user?.full_name}</p>
+                                      <p className="text-sm text-gray-800 dark:text-gray-300">{comment.content}</p>
                                    </div>
-                                   <span className="text-xs text-gray-400 mt-1.5 ml-2 font-medium">{formatDistanceToNow(new Date(comment.created_at))} ago</span>
+                                   <span className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 ml-2 font-medium">{formatDistanceToNow(new Date(comment.created_at))} ago</span>
                                 </div>
                              </div>
                           ))}
@@ -285,12 +285,12 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                     <div className="flex gap-3 relative items-start">
                         <Avatar className="w-9 h-9"><AvatarImage src={currentUser?.avatar_url}/><AvatarFallback>U</AvatarFallback></Avatar>
                         <div className="flex-1 relative">
-                           <Input value={commentInput} onChange={handleCommentChange} onKeyDown={(e) => e.key === 'Enter' && submitComment()} placeholder="Write a comment..." className="bg-white rounded-full pr-12 py-5 shadow-sm border-gray-200 focus:ring-1 focus:ring-blue-500"/>
+                           <Input value={commentInput} onChange={handleCommentChange} onKeyDown={(e) => e.key === 'Enter' && submitComment()} placeholder={t.writeComment} className="bg-white dark:bg-slate-800 rounded-full pr-12 py-5 shadow-sm border-gray-200 dark:border-slate-700 focus:ring-1 focus:ring-blue-500 dark:text-white dark:placeholder:text-gray-500"/>
                            {showMentionPopup && mentionResults.length > 0 && (
-                              <div className="absolute bottom-full left-0 w-64 mb-2 bg-white border rounded-xl shadow-xl z-50 overflow-hidden">
+                              <div className="absolute bottom-full left-0 w-64 mb-2 bg-white dark:bg-slate-800 border rounded-xl shadow-xl z-50 overflow-hidden dark:border-slate-700">
                                  {mentionResults.map(u => (
-                                    <div key={u.id} className="p-3 hover:bg-blue-50 cursor-pointer flex gap-3 items-center transition-colors" onClick={() => insertMention(u)}>
-                                       <Avatar className="w-8 h-8"><AvatarImage src={u.avatar_url}/></Avatar><span className="text-sm font-medium">{u.full_name}</span>
+                                    <div key={u.id} className="p-3 hover:bg-blue-50 dark:hover:bg-slate-700 cursor-pointer flex gap-3 items-center transition-colors" onClick={() => insertMention(u)}>
+                                       <Avatar className="w-8 h-8"><AvatarImage src={u.avatar_url}/></Avatar><span className="text-sm font-medium dark:text-gray-200">{u.full_name}</span>
                                     </div>
                                  ))}
                               </div>

@@ -8,13 +8,13 @@ import { Badge } from '@/components/ui/badge';
 import { Star, TrendingUp, Gift } from 'lucide-react';
 import { useUser } from '@/context/UserContext';
 import useSWR, { mutate } from 'swr'; // <--- IMPORT SWR
-
+import { useApp } from '@/context/AppProvider';
 const trendingTags = ['#TeamWork', '#ProblemSolver', '#Q3Goals', '#OfficeLife', '#FridayFeeling'];
 
 const RightSidebar = () => {
   const supabase = createClient();
   const { user: currentUser } = useUser();
-
+const { t } = useApp();
   // --- 1. SWR: FETCH USER STATS ---
   // Key depends on currentUser.id so it updates when user changes
   const { data: receivedKudosCount } = useSWR(
@@ -115,28 +115,28 @@ const RightSidebar = () => {
   const LeaderboardList = ({ title, data = [], icon: Icon }) => (
     <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
-            <h3 className="font-bold text-gray-900 flex items-center gap-2">
+            <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
                 {Icon && <Icon size={18} className="text-blue-500"/>} {title}
             </h3>
         </div>
         <div className="space-y-4">
             {data.length === 0 ? (
-                <p className="text-gray-400 text-sm italic">No data yet.</p>
+                <p className="text-gray-400 dark:text-gray-500 text-sm italic">{t.noDataYet}</p>
             ) : (
                 data.map((user, idx) => (
-                    <div key={user.id || idx} className="flex items-center gap-3 group cursor-pointer p-2 rounded-xl hover:bg-gray-50 transition-colors">
-                        <span className={`text-sm font-bold w-6 text-center ${idx === 0 ? 'text-yellow-500 text-lg' : 'text-gray-400'}`}>
+                    <div key={user.id || idx} className="flex items-center gap-3 group cursor-pointer p-2 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors">
+                        <span className={`text-sm font-bold w-6 text-center ${idx === 0 ? 'text-yellow-500 text-lg' : 'text-gray-400 dark:text-gray-500'}`}>
                             {user.rank}
                         </span>
-                        <Avatar className="w-10 h-10 border border-gray-100 group-hover:border-blue-200 transition-colors">
+                        <Avatar className="w-10 h-10 border border-gray-100 dark:border-slate-700 group-hover:border-blue-200 dark:group-hover:border-blue-800 transition-colors">
                             <AvatarImage src={user.avatar} />
                             <AvatarFallback>{user.name ? user.name[0] : 'U'}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                            <p className="font-bold text-sm text-gray-900 truncate group-hover:text-blue-600 transition-colors">
+                            <p className="font-bold text-sm text-gray-900 dark:text-gray-200 truncate group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                                 {user.name}
                             </p>
-                            <p className="text-xs text-gray-500 font-medium">
+                            <p className="text-xs text-gray-500 dark:text-gray-400 font-medium">
                                 {user.count} Kudos {user.label}
                             </p>
                         </div>
@@ -149,29 +149,30 @@ const RightSidebar = () => {
   );
 
   return (
-    <aside className="w-80 bg-white border-l border-gray-200 p-6 overflow-y-auto hidden xl:block sticky top-0 h-screen scrollbar-hide">
+    // ASIDE: dark:bg-slate-900 dark:border-slate-800
+    <aside className="w-80 bg-white dark:bg-slate-900 border-l border-gray-200 dark:border-slate-800 p-6 overflow-y-auto hidden xl:block sticky top-0 h-screen scrollbar-hide transition-colors">
        <Card className="bg-gradient-to-br from-blue-600 to-indigo-700 text-white mb-8 shadow-xl border-none rounded-3xl overflow-hidden relative">
            <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl"></div>
            <CardContent className="p-6 relative z-10">
-               <h3 className="text-xs font-bold uppercase opacity-80 tracking-wider mb-1">Total Kudos Received</h3>
+               <h3 className="text-xs font-bold uppercase opacity-80 tracking-wider mb-1">{t.totalKudosReceived}</h3>
                <div className="text-5xl font-extrabold my-3 tracking-tight">
                    {receivedKudosCount}
                </div>
                <div className="w-full bg-black/20 rounded-full h-1.5 mb-2 overflow-hidden">
                    <div className="bg-white/90 rounded-full h-full shadow-sm animate-pulse" style={{ width: '65%' }}></div>
                </div>
-               <p className="text-xs opacity-80 font-medium">You are doing great!</p>
+               <p className="text-xs opacity-80 font-medium">{t.youAreDoingGreat}</p>
            </CardContent>
        </Card>
 
-       <LeaderboardList title="Top Givers" data={realTopGivers} icon={Gift} />
-       <LeaderboardList title="Top Receivers" data={realTopReceivers} icon={TrendingUp} />
+       <LeaderboardList title={t.topGivers} data={realTopGivers} icon={Gift} />
+       <LeaderboardList title={t.topReceivers} data={realTopReceivers} icon={TrendingUp} />
        
-       <div className="pt-4 border-t border-gray-100">
-            <h3 className="font-bold text-gray-900 mb-4 text-sm uppercase tracking-wide text-gray-400">Trending Now</h3>
+       <div className="pt-4 border-t border-gray-100 dark:border-slate-800">
+            <h3 className="font-bold text-gray-900 dark:text-white mb-4 text-sm uppercase tracking-wide text-gray-400 dark:text-gray-500">{t.trendingNow}</h3>
             <div className="flex flex-wrap gap-2">
                 {trendingTags.map(tag => (
-                    <Badge key={tag} variant="secondary" className="bg-gray-50 text-gray-600 hover:bg-blue-50 hover:text-blue-600 cursor-pointer px-3 py-1.5 transition-all font-medium border border-gray-100">{tag}</Badge>
+                    <Badge key={tag} variant="secondary" className="bg-gray-50 dark:bg-slate-800 text-gray-600 dark:text-gray-300 hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer px-3 py-1.5 transition-all font-medium border border-gray-100 dark:border-slate-700">{tag}</Badge>
                 ))}
             </div>
         </div>

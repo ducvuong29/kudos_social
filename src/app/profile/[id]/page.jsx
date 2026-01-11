@@ -6,12 +6,12 @@ import { createClient } from '@/lib/supabase/client';
 import PostItem from '@/components/feed/PostItem'; 
 import { useParams } from 'next/navigation';
 import { useUser } from '@/context/UserContext'; 
-
+import { useApp } from '@/context/AppProvider';
 const UserProfilePage = () => {
   const { id } = useParams();
   const supabase = createClient();
   const { user: currentUser } = useUser(); 
-
+  const { t } = useApp();
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ received: 0, given: 0 });
@@ -151,28 +151,29 @@ useEffect(() => {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Loader2 className="animate-spin text-blue-500" /></div>;
   if (!profile) return <div className="text-center p-10">User not found</div>;
 
-  return (
-    <div className="min-h-screen bg-gray-50/50 pb-20 p-4 md:p-8 max-w-7xl mx-auto">
+ return (
+    // THAY ĐỔI: Thêm class transition-colors và dark:bg-slate-900
+    <div className="min-h-screen bg-gray-50/50 dark:bg-slate-900/50 pb-20 p-4 md:p-8 max-w-7xl mx-auto transition-colors">
         {/* Profile Header Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden mb-6">
+        <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-6 transition-colors">
             <div className="h-32 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
             <div className="px-6 pb-6 text-center -mt-16">
                 <div className="relative inline-block">
-                    <img src={profile.avatar_url || "https://github.com/shadcn.png"} className="w-32 h-32 rounded-full border-4 border-white shadow-md object-cover bg-white"/>
+                    <img src={profile.avatar_url || "https://github.com/shadcn.png"} className="w-32 h-32 rounded-full border-4 border-white dark:border-slate-800 shadow-md object-cover bg-white dark:bg-slate-700"/>
                 </div>
                 <div className="mt-4">
-                    <h2 className="text-2xl font-bold text-gray-900">{profile.full_name}</h2>
-                    <p className="text-blue-600 font-medium">{profile.job_title}</p>
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">{profile.full_name}</h2>
+                    <p className="text-blue-600 dark:text-blue-400 font-medium">{profile.job_title}</p>
                 </div>
-                <div className="flex items-center justify-center gap-4 mt-4 text-sm text-gray-500">
+                <div className="flex items-center justify-center gap-4 mt-4 text-sm text-gray-500 dark:text-gray-400">
                     <div className="flex items-center gap-1"><Briefcase className="w-4 h-4"/> <span>{profile.department || "No Dept"}</span></div>
                     <div className="flex items-center gap-1"><MapPin className="w-4 h-4"/> <span>{profile.location || "No Location"}</span></div>
                 </div>
-                {profile.bio && <p className="mt-4 text-gray-600 italic">"{profile.bio}"</p>}
+                {profile.bio && <p className="mt-4 text-gray-600 dark:text-gray-300 italic">"{profile.bio}"</p>}
                 
                 {currentUser?.id !== id && (
                     <div className="mt-6 flex justify-center gap-3">
-                        <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium">Gửi Kudos</button>
+                        <button className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium cursor-pointer transition-colors">{t.sendKudos}</button>
                     </div>
                 )}
             </div>
@@ -182,29 +183,39 @@ useEffect(() => {
             {/* Left Sidebar: Stats */}
             <div className="lg:col-span-4 space-y-6">
                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 text-center">
-                        <div className="text-2xl font-bold text-blue-600">{stats.received}</div>
-                        <div className="text-xs text-gray-500 uppercase font-bold">Received</div>
+                    <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 text-center transition-colors">
+                        <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">{stats.received}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">{t.received}</div>
                     </div>
-                    <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 text-center">
-                        <div className="text-2xl font-bold text-purple-600">{stats.given}</div>
-                        <div className="text-xs text-gray-500 uppercase font-bold">Given</div>
+                    <div className="bg-white dark:bg-slate-800 p-4 rounded-xl shadow-sm border border-gray-100 dark:border-gray-700 text-center transition-colors">
+                        <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">{stats.given}</div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 uppercase font-bold">{t.given}</div>
                     </div>
                  </div>
             </div>
 
             {/* Right Content: Feed */}
             <div className="lg:col-span-8">
-                <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden min-h-[500px]">
-                    {/* Tabs (Received / Given / All) */}
-                    <div className="flex border-b border-gray-100">
-                        <button onClick={() => setActiveTab('received')} className={`flex-1 py-4 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'received' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:bg-gray-50'}`}>Received</button>
-                        <button onClick={() => setActiveTab('given')} className={`flex-1 py-4 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'given' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:bg-gray-50'}`}>Given</button>
-                        <button onClick={() => setActiveTab('all')} className={`flex-1 py-4 text-sm font-semibold border-b-2 transition-colors ${activeTab === 'all' ? 'border-blue-500 text-blue-600' : 'border-transparent text-gray-500 hover:bg-gray-50'}`}>All Activity</button>
+                <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden min-h-[500px] transition-colors">
+                    {/* Tabs */}
+                    <div className="flex border-b border-gray-100 dark:border-gray-700">
+                        {['received', 'given', 'all'].map((tab) => (
+                            <button 
+                                key={tab} 
+                                onClick={() => setActiveTab(tab)} 
+                                className={`flex-1 py-4 text-sm font-semibold border-b-2 transition-colors cursor-pointer 
+                                    ${activeTab === tab 
+                                        ? 'border-blue-500 text-blue-600 dark:text-blue-400' 
+                                        : 'border-transparent text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700'
+                                    }`}
+                            >
+                                {tab === 'received' ? t.received : tab === 'given' ? t.given : t.allActivity}
+                            </button>
+                        ))}
                     </div>
                     
-                    <div className="p-4 sm:p-6 bg-gray-50/30">
-                        {loadingPosts ? <div className="text-center py-10"><Loader2 className="animate-spin w-6 h-6 mx-auto"/></div> : 
+                    <div className="p-4 sm:p-6 bg-gray-50/30 dark:bg-slate-900/50">
+                        {loadingPosts ? <div className="text-center py-10"><Loader2 className="animate-spin w-6 h-6 mx-auto text-blue-500"/></div> : 
                          posts.length > 0 ? (
                             <div className="space-y-6">
                                 {posts.map(post => (
@@ -212,7 +223,7 @@ useEffect(() => {
                                 ))}
                             </div>
                          ) : (
-                            <div className="text-center py-20 text-gray-400">Chưa có bài viết nào.</div>
+                            <div className="text-center py-20 text-gray-400 dark:text-gray-500">{t.noPosts}</div>
                          )
                         }
                     </div>

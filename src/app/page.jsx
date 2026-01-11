@@ -9,7 +9,7 @@ import { useUser } from '@/context/UserContext';
 import NotificationList from '@/components/common/NotificationList';
 import CreateKudos from '@/components/feed/CreateKudos';
 import PostItem from '@/components/feed/PostItem';
-
+import { useApp } from '@/context/AppProvider';
 const PAGE_SIZE = 10;
 
 // --- 1. SỬA FETCHER ĐỂ XỬ LÝ TÌM KIẾM ---
@@ -63,7 +63,7 @@ const NewsFeedPage = () => {
   const { user: currentUser } = useUser();
   const [viewingImage, setViewingImage] = useState(null);
   const loadMoreRef = useRef(null);
-
+  const { t } = useApp(); // <--- SỬ DỤNG HOOK NGÔN NGỮ
   // --- STATE CHO TÌM KIẾM ---
   const [searchInput, setSearchInput] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
@@ -147,18 +147,20 @@ const NewsFeedPage = () => {
         </div>
        )}
 
-       <div className="flex items-center justify-between mb-8 sticky top-0 bg-gray-50/95 backdrop-blur-sm z-40 py-2">
+       {/* HEADER: Thêm dark:bg-slate-900/95 */}
+       <div className="flex items-center justify-between mb-8 sticky top-0 bg-gray-50/95 dark:bg-slate-900/95 backdrop-blur-sm z-40 py-2 transition-colors">
           <div className="flex-1 max-w-2xl relative group">
              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500" size={20} />
-             {/* --- INPUT TÌM KIẾM --- */}
+             
+             {/* INPUT: Thêm dark:bg-slate-800 dark:text-white dark:border-gray-700 */}
              <Input 
                 value={searchInput}
                 onChange={(e) => setSearchInput(e.target.value)}
-                placeholder="Search kudos messages..." 
-                className="pl-12 py-6 bg-white border-gray-200 focus:ring-blue-500 rounded-full shadow-sm text-base" 
+                placeholder={t.searchPlaceholder} 
+                className="pl-12 py-6 bg-white dark:bg-slate-800 border-gray-200 dark:border-gray-700 focus:ring-blue-500 rounded-full shadow-sm text-base text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500" 
              />
              {searchInput && (
-                 <button onClick={() => setSearchInput('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer">
+                 <button onClick={() => setSearchInput('')} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 cursor-pointer">
                      <X size={16} />
                  </button>
              )}
@@ -168,11 +170,9 @@ const NewsFeedPage = () => {
           </div>
        </div>
 
-       {/* Ẩn phần tạo bài khi đang tìm kiếm để tập trung vào kết quả */}
        {!debouncedSearch && <CreateKudos onSuccess={refreshFeed} />}
 
        <div className="space-y-8 pb-20">
-         {/* Loading lần đầu hoặc khi đang search trang đầu tiên */}
          {isLoading && size === 1 ? (
             <div className="text-center py-12"><Loader2 className="animate-spin text-blue-500 w-8 h-8 mx-auto"/></div>
          ) : (
@@ -192,17 +192,17 @@ const NewsFeedPage = () => {
                        {debouncedSearch ? (
                            <>
                                <div className="text-4xl mb-4">🔍</div>
-                               <p className="text-gray-500 text-lg">No kudos found for "{debouncedSearch}"</p>
+                               <p className="text-gray-500 dark:text-gray-400 text-lg">{t.noResults} "{debouncedSearch}"</p>
                            </>
                        ) : (
-                           <div className="text-center text-gray-500">No posts yet. Be the first!</div>
+                           <div className="text-center text-gray-500 dark:text-gray-400">{t.noPosts}</div>
                        )}
                    </div>
                )}
 
                <div ref={loadMoreRef} className="h-10 flex items-center justify-center w-full mt-4">
                    {isLoadingMore && <Loader2 className="animate-spin text-blue-500 w-6 h-6" />}
-                   {isReachingEnd && kudosList.length > 0 && <p className="text-gray-400 text-sm">You've reached the end!</p>}
+                   {isReachingEnd && kudosList.length > 0 && <p className="text-gray-400 dark:text-gray-500 text-sm">{t.endOfList}</p>}
                </div>
            </>
          )}
