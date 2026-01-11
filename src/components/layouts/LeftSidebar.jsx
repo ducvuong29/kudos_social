@@ -32,23 +32,23 @@ const LeftSidebar = () => {
         </div>
         <nav className="flex-1 p-4 space-y-2">
             <Link href="/">
-             <Button variant="ghost" className={`w-full justify-start gap-3 font-semibold ${pathname === '/' ? 'bg-blue-50 text-blue-700 border-r-4 border-blue-600' : 'text-gray-600'}`}>
+             <Button variant="ghost" className={`w-full justify-start gap-3 font-semibold cursor-pointer ${pathname === '/' ? 'bg-blue-50 text-blue-700 border-r-4 border-blue-600' : 'text-gray-600'}`}>
                 <Home size={20}/> News Feed
              </Button>
           </Link>
           
           <Link href="/leaderboard">
-             <Button variant="ghost" className={`w-full justify-start gap-3 font-semibold ${pathname === '/leaderboard' ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}>
+             <Button variant="ghost" className={`w-full justify-start gap-3 font-semibold cursor-pointer ${pathname === '/leaderboard' ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}>
                 <Trophy size={20}/> Leaderboard
              </Button>
           </Link>
            <Link href="/profile">
-             <Button variant="ghost" className={`w-full justify-start gap-3 font-semibold ${pathname === '/profile' ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}>
+             <Button variant="ghost" className={`w-full justify-start gap-3 font-semibold cursor-pointer ${pathname === '/profile' ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}>
                 <User size={20}/> Profile 
              </Button>
           </Link>
           <Link href="/community">
-            <Button variant="ghost" className={`w-full justify-start gap-3 font-semibold ${pathname === '/community' ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}>
+            <Button variant="ghost" className={`w-full justify-start gap-3 font-semibold cursor-pointer ${pathname === '/community' ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}>
                 <Users size={20}/> Community
             </Button>
           </Link>
@@ -65,7 +65,7 @@ const LeftSidebar = () => {
                             <p className="text-xs text-blue-600">Online</p>
                         </div>
                     </div>
-                    <Button onClick={handleLogout} variant="outline" size="sm" className="w-full gap-2 text-gray-600 hover:text-red-600"><LogOut size={14}/> Log Out</Button>
+                    <Button onClick={handleLogout} variant="outline" size="sm" className="w-full gap-2 text-gray-600 hover:text-red-600 cursor-pointer"><LogOut size={14}/> Log Out</Button>
                 </div>
             </div>
         </nav>

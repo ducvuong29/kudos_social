@@ -54,7 +54,7 @@ export async function updateSession(request) {
   }
 
   // B. Nếu ĐÃ đăng nhập mà cố vào các trang Auth (Login/Register/Forgot) -> Đá về trang chủ
-  const authRoutes = ['/login', '/forgot-password']
+  const authRoutes = ['/login']
   
   if (user && authRoutes.some(route => path.startsWith(route))) {
     return NextResponse.redirect(new URL('/', request.url))

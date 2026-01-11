@@ -127,7 +127,7 @@ const NotificationList = () => { // Không cần nhận prop userId nữa
             ${showNotifications ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'}
         `}
       >
-        <Bell className="w-5 h-5" />
+        <Bell className="w-5 h-5 cursor-pointer" />
         {unreadCount > 0 && (
           <span className="absolute top-2 right-2.5 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-white animate-pulse"></span>
         )}

@@ -202,12 +202,12 @@ const CreateKudos = ({ onSuccess }) => {
                         
                         <div className="flex justify-between items-center pt-4 border-t border-gray-100">
                             <div className="flex gap-2">
-                                <Button variant="ghost" size="icon" onClick={handleAtClick} className={`rounded-full transition-colors ${isSearchActive ? 'bg-indigo-100 text-indigo-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}><AtSign size={20}/></Button>
-                                <Button variant="ghost" size="icon" className={`rounded-full transition-colors ${showTagSuggestions ? 'bg-indigo-100 text-indigo-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`} onClick={() => setShowTagSuggestions(!showTagSuggestions)}><Hash size={20}/></Button>
-                                <Button variant="ghost" size="icon" className="rounded-full text-gray-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors" onClick={() => fileInputRef.current?.click()}><ImageIcon size={20}/></Button>
+                                <Button variant="ghost" size="icon" onClick={handleAtClick} className={`rounded-full cursor-pointer transition-colors ${isSearchActive ? 'bg-indigo-100 text-indigo-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`}><AtSign size={20}/></Button>
+                                <Button variant="ghost" size="icon" className={`rounded-full cursor-pointer transition-colors ${showTagSuggestions ? 'bg-indigo-100 text-indigo-600' : 'text-gray-400 hover:bg-gray-100 hover:text-gray-600'}`} onClick={() => setShowTagSuggestions(!showTagSuggestions)}><Hash size={20}/></Button>
+                                <Button variant="ghost" size="icon" className="rounded-full cursor-pointer text-gray-400 hover:bg-emerald-50 hover:text-emerald-600 transition-colors" onClick={() => fileInputRef.current?.click()}><ImageIcon size={20}/></Button>
                                 <input type="file" ref={fileInputRef} hidden multiple accept="image/*" onChange={handleFileSelect}/>
                             </div>
-                            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-8 py-6 font-bold text-base shadow-xl shadow-indigo-200 active:scale-95 transition-all" onClick={handleSubmit} disabled={isSubmitting}>{isSubmitting ? <span className="animate-spin mr-2">⏳</span> : <span className="mr-2">🚀</span>} Gửi Kudos</Button>
+                            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl px-8 py-6 font-bold text-base shadow-xl cursor-pointer shadow-indigo-200 active:scale-95 transition-all" onClick={handleSubmit} disabled={isSubmitting}>{isSubmitting ? <span className="animate-spin mr-2">⏳</span> : <span className="mr-2">🚀</span>} Gửi Kudos</Button>
                         </div>
                     </div>
                 </div>

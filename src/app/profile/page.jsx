@@ -7,7 +7,7 @@ import {
   Eye, EyeOff 
 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
-import useSWR, { mutate } from 'swr'; // <--- IMPORT SWR
+import useSWR, { mutate } from 'swr'; 
 import PostItem from '@/components/feed/PostItem'; 
 import NotificationList from '@/components/common/NotificationList'; 
 import { useUser } from '@/context/UserContext'; 
@@ -18,7 +18,10 @@ const ProfilePage = () => {
   
   const [activeTab, setActiveTab] = useState('received'); 
   
-  // Edit Profile & Password State (Giữ nguyên vì là form nhập liệu)
+  // --- 1. THÊM STATE CHO TÌM KIẾM ---
+  const [searchQuery, setSearchQuery] = useState(''); 
+
+  // Edit Profile & Password State
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formData, setFormData] = useState({ full_name: '', job_title: '', department: '', location: '', bio: '', avatar_url: '' });
@@ -28,7 +31,7 @@ const ProfilePage = () => {
   const [loadingPass, setLoadingPass] = useState(false);
   const [showPassword, setShowPassword] = useState({ current: false, new: false, confirm: false });
 
-  // --- 1. SET FORM DATA KHI USER LOAD ---
+  // --- SET FORM DATA ---
   useEffect(() => {
     if (user) {
       setFormData({
@@ -42,8 +45,7 @@ const ProfilePage = () => {
     }
   }, [user]);
 
-  // --- 2. SWR FETCH STATS ---
-  // Key: ['profile-stats', user.id] -> Cache riêng cho từng user
+  // --- SWR FETCH STATS ---
   const { data: stats } = useSWR(user ? ['profile-stats', user.id] : null, async () => {
       const { count: receivedCount } = await supabase.from('kudos_receivers').select('*', { count: 'exact', head: true }).eq('user_id', user.id);
       const { data: givenData, count: givenCount } = await supabase.from('kudos').select('created_at', { count: 'exact' }).eq('sender_id', user.id).order('created_at', { ascending: false });
@@ -63,12 +65,11 @@ const ProfilePage = () => {
       }
       return { received: receivedCount || 0, given: givenCount || 0, streak: currentStreak };
   }, {
-      fallbackData: { received: 0, given: 0, streak: 0 }, // Giá trị mặc định khi đang loading
+      fallbackData: { received: 0, given: 0, streak: 0 },
       revalidateOnFocus: false
   });
 
-  // --- 3. SWR FETCH POSTS (THEO TAB) ---
-  // Key thay đổi theo activeTab -> Cache riêng từng tab (received/given/all)
+  // --- SWR FETCH POSTS ---
   const { data: posts, isLoading: loadingPosts, mutate: mutatePosts } = useSWR(user ? ['profile-posts', user.id, activeTab] : null, async () => {
       const selectQuery = `*, sender:sender_id(full_name, avatar_url, id), recipients:kudos_receivers(user:user_id(full_name, avatar_url, id)), comments(id, content, created_at, user:user_id(full_name, avatar_url, id)), reactions(type, user_id)`;
       let dataToSet = [];
@@ -98,13 +99,29 @@ const ProfilePage = () => {
           reactions: p.reactions || []
       }));
   }, {
-      dedupingInterval: 60000, // Trong 60s không gọi lại API nếu key trùng
-      revalidateOnFocus: false // Không tự refresh khi click lại tab
+      dedupingInterval: 60000,
+      revalidateOnFocus: false 
   });
 
-  // --- HANDLERS (Update Post Local Cache) ---
+  // --- 2. LOGIC LỌC BÀI VIẾT (FILTER) ---
+  // Lọc bài viết dựa trên từ khóa tìm kiếm (searchQuery)
+  const filteredPosts = posts?.filter(post => {
+      if (!searchQuery) return true; // Nếu không tìm kiếm thì hiện hết
+      const query = searchQuery.toLowerCase();
+      
+      // Tìm trong nội dung tin nhắn
+      const matchMessage = post.message?.toLowerCase().includes(query);
+      // Tìm theo tên người gửi
+      const matchSender = post.sender?.full_name?.toLowerCase().includes(query);
+      // Tìm theo tên người nhận
+      const matchReceiver = post.receiverList?.some(r => r.full_name.toLowerCase().includes(query));
+
+      return matchMessage || matchSender || matchReceiver;
+  }) || [];
+
+
+  // --- HANDLERS ---
   const handleUpdatePostList = async (updatedPost) => {
-      // Cập nhật cache SWR mà không cần gọi lại API (Optimistic UI)
       await mutatePosts(posts.map(p => p.id === updatedPost.id ? updatedPost : p), false);
   };
 
@@ -112,11 +129,11 @@ const ProfilePage = () => {
       await mutatePosts(posts.filter(p => p.id !== postId), false);
   };
 
-  // --- HANDLERS (Profile & Password) ---
   const toggleShow = (field) => setShowPassword(prev => ({ ...prev, [field]: !prev[field] }));
   const handleAvatarChange = (e) => { const file = e.target.files[0]; if (file) { setAvatarFile(file); setPreviewUrl(URL.createObjectURL(file)); } };
   
   const handleSaveProfile = async () => {
+    // ... (Giữ nguyên logic save)
     setIsSaving(true);
     try {
       let avatarUrl = formData.avatar_url;
@@ -136,12 +153,13 @@ const ProfilePage = () => {
       const { error } = await supabase.from('profiles').upsert(updates);
       if (error) throw error;
       
-      await refreshProfile(); // Refresh Context User
+      await refreshProfile(); 
       setIsEditing(false); setAvatarFile(null); alert("Cập nhật thành công!");
     } catch (error) { alert('Lỗi cập nhật: ' + error.message); } finally { setIsSaving(false); }
   };
 
   const handleUpdatePassword = async () => {
+    // ... (Giữ nguyên logic password)
     const { currentPassword, newPassword, confirmPassword } = passData;
     if (!currentPassword || !newPassword || !confirmPassword) return alert("Vui lòng nhập đầy đủ các trường mật khẩu");
     setLoadingPass(true);
@@ -164,34 +182,36 @@ const ProfilePage = () => {
   return (
     <div className="min-h-screen bg-gray-50/50 pb-20">
        
-       {/* EDIT MODAL */}
+       {/* EDIT MODAL GIỮ NGUYÊN */}
        {isEditing && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+             {/* ... Nội dung modal giữ nguyên ... */}
+             <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
               <h3 className="font-bold text-lg text-gray-800">Edit Profile</h3>
-              <button onClick={() => setIsEditing(false)}><X className="text-gray-400 hover:text-gray-600"/></button>
+              <button onClick={() => setIsEditing(false)}><X className="text-gray-400 hover:text-gray-600 cursor-pointer"/></button>
             </div>
             <div className="p-6 grid gap-6 max-h-[70vh] overflow-y-auto">
-              <div className="flex flex-col items-center justify-center gap-4">
-                <div className="relative group">
-                   <img src={previewUrl || formData.avatar_url || "https://github.com/shadcn.png"} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"/>
-                   <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
-                      <Camera className="text-white w-8 h-8"/><input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange}/>
-                   </label>
+                <div className="flex flex-col items-center justify-center gap-4">
+                    <div className="relative group">
+                        <img src={previewUrl || formData.avatar_url || "https://github.com/shadcn.png"} alt="Avatar" className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-lg"/>
+                        <label className="absolute inset-0 flex items-center justify-center bg-black/40 rounded-full opacity-0 group-hover:opacity-100 cursor-pointer transition-opacity">
+                            <Camera className="text-white w-8 h-8"/><input type="file" className="hidden" accept="image/*" onChange={handleAvatarChange}/>
+                        </label>
+                    </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2"><label className="text-sm font-medium text-gray-700">Full Name</label><input type="text" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"/></div>
-                <div className="space-y-2"><label className="text-sm font-medium text-gray-700">Job Title</label><input type="text" value={formData.job_title} onChange={e => setFormData({...formData, job_title: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"/></div>
-                <div className="space-y-2"><label className="text-sm font-medium text-gray-700">Department</label><input type="text" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"/></div>
-                <div className="space-y-2"><label className="text-sm font-medium text-gray-700">Location</label><input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Hanoi"/></div>
-                <div className="space-y-2 md:col-span-2"><label className="text-sm font-medium text-gray-700">Bio</label><textarea value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg outline-none h-24 resize-none focus:ring-2 focus:ring-blue-500"/></div>
-              </div>
+                {/* Form Inputs giữ nguyên */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2"><label className="text-sm font-medium text-gray-700">Full Name</label><input type="text" value={formData.full_name} onChange={e => setFormData({...formData, full_name: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                    <div className="space-y-2"><label className="text-sm font-medium text-gray-700">Job Title</label><input type="text" value={formData.job_title} onChange={e => setFormData({...formData, job_title: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                    <div className="space-y-2"><label className="text-sm font-medium text-gray-700">Department</label><input type="text" value={formData.department} onChange={e => setFormData({...formData, department: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"/></div>
+                    <div className="space-y-2"><label className="text-sm font-medium text-gray-700">Location</label><input type="text" value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" placeholder="e.g. Hanoi"/></div>
+                    <div className="space-y-2 md:col-span-2"><label className="text-sm font-medium text-gray-700">Bio</label><textarea value={formData.bio} onChange={e => setFormData({...formData, bio: e.target.value})} className="w-full p-2 border border-gray-200 rounded-lg outline-none h-24 resize-none focus:ring-2 focus:ring-blue-500"/></div>
+                </div>
             </div>
             <div className="p-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3">
-               <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg">Cancel</button>
-               <button onClick={handleSaveProfile} disabled={isSaving} className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50">{isSaving && <Loader2 className="w-4 h-4 animate-spin"/>} Save Changes</button>
+               <button onClick={() => setIsEditing(false)} className="px-4 py-2 text-gray-600 font-medium hover:bg-gray-200 rounded-lg cursor-pointer">Cancel</button>
+               <button onClick={handleSaveProfile} disabled={isSaving} className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 flex items-center gap-2 disabled:opacity-50 cursor-pointer">{isSaving && <Loader2 className="w-4 h-4 animate-spin"/>} Save Changes</button>
             </div>
           </div>
         </div>
@@ -205,7 +225,14 @@ const ProfilePage = () => {
              <div className="flex items-center gap-4 ml-auto">
                <div className="relative hidden sm:block group">
                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                 <input type="text" placeholder="Search..." className="pl-10 pr-4 h-10 w-48 lg:w-72 bg-gray-50/50 border border-gray-200 rounded-full text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all" />
+                 {/* --- 3. CẬP NHẬT INPUT SEARCH --- */}
+                 <input 
+                    type="text" 
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search history..." // Đổi placeholder cho dễ hiểu
+                    className="pl-10 pr-4 h-10 w-48 lg:w-72 bg-gray-50/50 border border-gray-200 rounded-full text-sm focus:bg-white focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none transition-all" 
+                 />
                </div>
                <NotificationList />
              </div>
@@ -217,7 +244,7 @@ const ProfilePage = () => {
        <main className="px-4 sm:px-6 lg:px-8 py-8 max-w-7xl mx-auto">
          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
            
-           {/* LEFT COLUMN */}
+           {/* LEFT COLUMN (Giữ nguyên) */}
            <div className="lg:col-span-4 space-y-6">
              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden top-24 z-10">
                <div className="h-32 bg-gradient-to-r from-blue-400 to-purple-500"></div>
@@ -234,13 +261,13 @@ const ProfilePage = () => {
                     <div className="flex items-center gap-1"><MapPin className="w-4 h-4"/> <span>{user?.location || "No Location"}</span></div>
                  </div>
                  {user?.bio && <p className="mt-4 text-gray-600 text-sm leading-relaxed px-4 italic">"{user.bio}"</p>}
-                 <button onClick={() => setIsEditing(true)} className="mt-6 w-full bg-gray-900 text-white py-2.5 rounded-xl font-semibold hover:bg-gray-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-gray-200">
+                 <button onClick={() => setIsEditing(true)} className="mt-6 w-full bg-gray-900 text-white py-2.5 rounded-xl font-semibold hover:bg-gray-800 transition-all flex items-center justify-center gap-2 shadow-lg shadow-gray-200 cursor-pointer">
                    <Edit className="w-4 h-4" /> Edit Profile
                  </button>
                </div>
              </div>
 
-             {/* CHANGE PASSWORD */}
+             {/* CHANGE PASSWORD (Giữ nguyên) */}
              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 z-0 ">
                 <div className="flex items-center gap-2 mb-4 text-gray-900"><Lock className="w-5 h-5 text-gray-700" /><h3 className="font-bold">Security</h3></div>
                 <div className="space-y-4">
@@ -248,24 +275,24 @@ const ProfilePage = () => {
                         <label className="text-xs font-medium text-gray-500 mb-1 block">Current Password</label>
                         <div className="relative">
                             <input type={showPassword.current ? "text" : "password"} value={passData.currentPassword} onChange={(e) => setPassData({...passData, currentPassword: e.target.value})} className="w-full p-2.5 pr-10 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Enter current password" />
-                            <button type="button" onClick={() => toggleShow('current')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">{showPassword.current ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                            <button type="button" onClick={() => toggleShow('current')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer">{showPassword.current ? <EyeOff size={16} /> : <Eye size={16} />}</button>
                         </div>
                     </div>
                     <div className="relative">
                         <label className="text-xs font-medium text-gray-500 mb-1 block">New Password</label>
                         <div className="relative">
                             <input type={showPassword.new ? "text" : "password"} value={passData.newPassword} onChange={(e) => setPassData({...passData, newPassword: e.target.value})} className="w-full p-2.5 pr-10 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Min 6 characters" />
-                            <button type="button" onClick={() => toggleShow('new')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">{showPassword.new ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                            <button type="button" onClick={() => toggleShow('new')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer">{showPassword.new ? <EyeOff size={16} /> : <Eye size={16} />}</button>
                         </div>
                     </div>
                     <div className="relative">
                         <label className="text-xs font-medium text-gray-500 mb-1 block">Confirm Password</label>
                         <div className="relative">
                             <input type={showPassword.confirm ? "text" : "password"} value={passData.confirmPassword} onChange={(e) => setPassData({...passData, confirmPassword: e.target.value})} className="w-full p-2.5 pr-10 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Re-enter new password" />
-                            <button type="button" onClick={() => toggleShow('confirm')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">{showPassword.confirm ? <EyeOff size={16} /> : <Eye size={16} />}</button>
+                            <button type="button" onClick={() => toggleShow('confirm')} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 cursor-pointer">{showPassword.confirm ? <EyeOff size={16} /> : <Eye size={16} />}</button>
                         </div>
                     </div>
-                    <button onClick={handleUpdatePassword} disabled={loadingPass} className="w-full mt-2 bg-blue-50 text-blue-600 hover:bg-blue-100 py-2.5 rounded-lg font-semibold text-sm transition-colors flex items-center justify-center gap-2">{loadingPass ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>} Update Password</button>
+                    <button onClick={handleUpdatePassword} disabled={loadingPass} className="w-full mt-2 bg-blue-50 text-blue-600 hover:bg-blue-100 py-2.5 rounded-lg font-semibold text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer">{loadingPass ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>} Update Password</button>
                 </div>
              </div>
            </div>
@@ -273,12 +300,12 @@ const ProfilePage = () => {
            {/* RIGHT COLUMN */}
            <div className="lg:col-span-8 space-y-6">
              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+               {/* ... (Phần Stats giữ nguyên) ... */}
                <div className="bg-white rounded-2xl p-5 shadow-sm border border-gray-200 hover:border-blue-300 transition-all group">
                  <div className="flex justify-between items-start mb-4">
                     <div className="w-10 h-10 bg-blue-50 rounded-xl flex items-center justify-center group-hover:bg-blue-100 transition-colors"><Download className="w-5 h-5 text-blue-600" /></div>
                     <span className="text-xs font-bold bg-gray-100 text-gray-600 px-2 py-1 rounded-full">Total</span>
                  </div>
-                 {/* Dữ liệu lấy từ stats cache */}
                  <div className="text-3xl font-bold text-gray-900">{stats?.received}</div>
                  <p className="text-sm text-gray-500 mt-1">Kudos Received</p>
                </div>
@@ -302,18 +329,18 @@ const ProfilePage = () => {
 
              <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden min-h-[500px]">
                 <div className="flex border-b border-gray-100 sticky top-0 bg-white z-10">
-                    <button onClick={() => setActiveTab('received')} className={`flex-1 py-4 text-sm font-semibold transition-colors relative ${activeTab === 'received' ? 'text-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>Received {activeTab === 'received' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600"></div>}</button>
-                    <button onClick={() => setActiveTab('given')} className={`flex-1 py-4 text-sm font-semibold transition-colors relative ${activeTab === 'given' ? 'text-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>Given {activeTab === 'given' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600"></div>}</button>
-                    <button onClick={() => setActiveTab('all')} className={`flex-1 py-4 text-sm font-semibold transition-colors relative ${activeTab === 'all' ? 'text-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>All Activity {activeTab === 'all' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600"></div>}</button>
+                    <button onClick={() => {setActiveTab('received'); setSearchQuery('')}} className={`flex-1 py-4 text-sm font-semibold transition-colors relative cursor-pointer ${activeTab === 'received' ? 'text-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>Received {activeTab === 'received' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600"></div>}</button>
+                    <button onClick={() => {setActiveTab('given'); setSearchQuery('')}} className={`flex-1 py-4 text-sm font-semibold transition-colors relative cursor-pointer ${activeTab === 'given' ? 'text-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>Given {activeTab === 'given' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600"></div>}</button>
+                    <button onClick={() => {setActiveTab('all'); setSearchQuery('')}} className={`flex-1 py-4 text-sm font-semibold transition-colors relative cursor-pointer ${activeTab === 'all' ? 'text-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'}`}>All Activity {activeTab === 'all' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600"></div>}</button>
                 </div>
                 
                 <div className="p-4 sm:p-6 bg-gray-50/30">
-                    {/* Logic loading và hiển thị từ SWR */}
+                    {/* --- 4. RENDER DANH SÁCH ĐÃ LỌC --- */}
                     {loadingPosts && !posts ? (
                         <div className="py-20 text-center"><Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto mb-2"/><p className="text-gray-400 text-sm">Loading activity...</p></div>
-                    ) : posts && posts.length > 0 ? (
+                    ) : filteredPosts && filteredPosts.length > 0 ? (
                         <div className="space-y-6">
-                            {posts.map(item => (
+                            {filteredPosts.map(item => (
                                 <PostItem 
                                     key={item.id} 
                                     post={item} 
@@ -327,7 +354,9 @@ const ProfilePage = () => {
                         <div className="text-center py-20">
                             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-3xl opacity-50">{activeTab === 'received' ? '📥' : activeTab === 'given' ? '📤' : '🗂️'}</div>
                             <h3 className="text-gray-900 font-bold mb-2">No activity found</h3>
-                            <p className="text-gray-500 text-sm max-w-xs mx-auto">No activity yet.</p>
+                            <p className="text-gray-500 text-sm max-w-xs mx-auto">
+                                {searchQuery ? `No results for "${searchQuery}"` : "No activity yet."}
+                            </p>
                         </div>
                     )}
                 </div>
