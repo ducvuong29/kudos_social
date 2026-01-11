@@ -10,6 +10,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import NotificationList from '@/components/common/NotificationList'; // <--- Import component thông báo
 import { useUser } from '@/context/UserContext'; // <--- Import UserContext
 
+
 const LeaderboardPage = () => {
   const supabase = createClient();
   const { user: currentUser } = useUser(); // Lấy user từ Context

@@ -2,20 +2,20 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Home, Trophy, LogOut, User } from 'lucide-react';
+import { Home, Trophy, LogOut, User, Users } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { createClient } from '@/lib/supabase/client';
 import { useRouter } from 'next/navigation';
-import { useUser } from '@/context/UserContext'; // <--- IMPORT CONTEXT
+import { useUser } from '@/context/UserContext'; 
 
-const LeftSidebar = () => { // Không cần nhận props nữa
+const LeftSidebar = () => { 
   const pathname = usePathname();
   const router = useRouter();
   const supabase = createClient();
   
-  // Lấy user từ Context (đã fetch sẵn ở layout)
-  const { user, profile } = useUser(); 
+  // --- SỬA Ở ĐÂY: Chỉ lấy user (vì nó đã gộp cả profile) ---
+  const { user } = useUser(); 
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -44,19 +44,24 @@ const LeftSidebar = () => { // Không cần nhận props nữa
           </Link>
            <Link href="/profile">
              <Button variant="ghost" className={`w-full justify-start gap-3 font-semibold ${pathname === '/profile' ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}>
-                <User size={20}/> Profile {/* Đổi icon Trophy thành User cho đúng nghĩa */}
+                <User size={20}/> Profile 
              </Button>
+          </Link>
+          <Link href="/community">
+            <Button variant="ghost" className={`w-full justify-start gap-3 font-semibold ${pathname === '/community' ? 'bg-blue-50 text-blue-700' : 'text-gray-600'}`}>
+                <Users size={20}/> Community
+            </Button>
           </Link>
             <div className="mt-auto pt-6 border-t border-gray-50 mx-2">
                 <div className="p-4 bg-gray-50/80 rounded-2xl border border-gray-100/80 hover:border-blue-100 transition-colors">
                     <div className="flex items-center gap-3 mb-3">
-                        {/* Dùng profile từ context để hiển thị */}
+                        {/* --- SỬA Ở ĐÂY: Dùng user thay cho profile --- */}
                         <Avatar className="w-10 h-10 ring-2 ring-blue-500 ring-offset-2">
-                            <AvatarImage src={profile?.avatar_url}/>
-                            <AvatarFallback>{profile?.full_name?.charAt(0) || 'U'}</AvatarFallback>
+                            <AvatarImage src={user?.avatar_url}/>
+                            <AvatarFallback>{user?.full_name?.charAt(0) || 'U'}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                            <p className="text-sm font-bold truncate">{profile?.full_name || 'Loading...'}</p>
+                            <p className="text-sm font-bold truncate">{user?.full_name || 'Loading...'}</p>
                             <p className="text-xs text-blue-600">Online</p>
                         </div>
                     </div>

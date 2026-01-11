@@ -1,111 +1,118 @@
 "use client"
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react'; // Removed useState
 import { createClient } from '@/lib/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Star, TrendingUp, Gift } from 'lucide-react';
-import { useUser } from '@/context/UserContext'; // <--- Import UserContext
-// import { useKudos } from '@/context/KudosContext'; // Có thể dùng nếu muốn tính toán từ client state
+import { useUser } from '@/context/UserContext';
+import useSWR, { mutate } from 'swr'; // <--- IMPORT SWR
 
 const trendingTags = ['#TeamWork', '#ProblemSolver', '#Q3Goals', '#OfficeLife', '#FridayFeeling'];
 
-const RightSidebar = () => { // Không cần props currentUser nữa
+const RightSidebar = () => {
   const supabase = createClient();
-  const { user: currentUser } = useUser(); // Lấy user từ Context
+  const { user: currentUser } = useUser();
 
-  const [receivedKudosCount, setReceivedKudosCount] = useState(0);
-  const [realTopGivers, setRealTopGivers] = useState([]);
-  const [realTopReceivers, setRealTopReceivers] = useState([]);
-
-  // --- LOGIC 1: LẤY SỐ KUDOS CỦA MÌNH ---
-  const fetchUserStats = async () => {
-    if (!currentUser) return;
-    const { count, error } = await supabase
-        .from('kudos_receivers')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', currentUser.id);
-    if (!error) setReceivedKudosCount(count || 0);
-  };
-
-  // --- LOGIC 2 & 3: FETCH TOP GIVERS & RECEIVERS ---
-  // (Giữ nguyên logic fetch API để đảm bảo tính chính xác toàn thời gian)
-  const fetchTopGivers = async () => {
-    const { data: allKudos, error } = await supabase.from('kudos').select('sender_id');
-    if (!error && allKudos) {
-        const counts = allKudos.reduce((acc, curr) => {
-            acc[curr.sender_id] = (acc[curr.sender_id] || 0) + 1;
-            return acc;
-        }, {});
-        const topIds = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 3);
-        processLeaderboard(topIds, counts, setRealTopGivers, 'given');
+  // --- 1. SWR: FETCH USER STATS ---
+  // Key depends on currentUser.id so it updates when user changes
+  const { data: receivedKudosCount } = useSWR(
+    currentUser ? ['my-stats', currentUser.id] : null,
+    async () => {
+        const { count, error } = await supabase
+            .from('kudos_receivers')
+            .select('*', { count: 'exact', head: true })
+            .eq('user_id', currentUser.id);
+        if (error) throw error;
+        return count || 0;
+    },
+    { 
+        fallbackData: 0,
+        revalidateOnFocus: false 
     }
+  );
+
+  // --- Helper Function for Leaderboard Processing ---
+  const processLeaderboardData = async (topIds, counts, typeLabel) => {
+      if (topIds.length === 0) return [];
+      const { data: profiles } = await supabase.from('profiles').select('id, full_name, avatar_url').in('id', topIds);
+      
+      if (!profiles) return [];
+
+      return topIds.map((id, index) => {
+          const profile = profiles.find(p => p.id === id);
+          return {
+              id: id,
+              rank: index + 1,
+              name: profile?.full_name || 'Unknown',
+              count: counts[id],
+              avatar: profile?.avatar_url,
+              isTop: index === 0,
+              label: typeLabel === 'given' ? 'Given' : 'Received'
+          };
+      });
   };
 
-  const fetchTopReceivers = async () => {
-    const { data: allReceivers, error } = await supabase.from('kudos_receivers').select('user_id');
-    if (!error && allReceivers) {
-        const counts = allReceivers.reduce((acc, curr) => {
-            acc[curr.user_id] = (acc[curr.user_id] || 0) + 1;
-            return acc;
-        }, {});
-        const topIds = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 3);
-        processLeaderboard(topIds, counts, setRealTopReceivers, 'received');
-    }
-  };
+  // --- 2. SWR: FETCH TOP GIVERS ---
+  const { data: realTopGivers } = useSWR('top-givers', async () => {
+      const { data: allKudos, error } = await supabase.from('kudos').select('sender_id');
+      if (error || !allKudos) return [];
 
-  const processLeaderboard = async (topIds, counts, setState, typeLabel) => {
-      if (topIds.length > 0) {
-          const { data: profiles } = await supabase.from('profiles').select('id, full_name, avatar_url').in('id', topIds);
-          if (profiles) {
-              const leaderboard = topIds.map((id, index) => {
-                  const profile = profiles.find(p => p.id === id);
-                  return {
-                      id: id,
-                      rank: index + 1,
-                      name: profile?.full_name || 'Unknown',
-                      count: counts[id],
-                      avatar: profile?.avatar_url,
-                      isTop: index === 0,
-                      label: typeLabel === 'given' ? 'Given' : 'Received'
-                  };
-              });
-              setState(leaderboard);
-          }
-      } else {
-          setState([]);
-      }
-  }
+      const counts = allKudos.reduce((acc, curr) => {
+          acc[curr.sender_id] = (acc[curr.sender_id] || 0) + 1;
+          return acc;
+      }, {});
+      
+      const topIds = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 3);
+      return processLeaderboardData(topIds, counts, 'given');
+  }, { 
+      fallbackData: [],
+      dedupingInterval: 60000 // Cache for 60 seconds
+  });
 
-  // --- USE EFFECT ---
+  // --- 3. SWR: FETCH TOP RECEIVERS ---
+  const { data: realTopReceivers } = useSWR('top-receivers', async () => {
+      const { data: allReceivers, error } = await supabase.from('kudos_receivers').select('user_id');
+      if (error || !allReceivers) return [];
+
+      const counts = allReceivers.reduce((acc, curr) => {
+          acc[curr.user_id] = (acc[curr.user_id] || 0) + 1;
+          return acc;
+      }, {});
+
+      const topIds = Object.keys(counts).sort((a, b) => counts[b] - counts[a]).slice(0, 3);
+      return processLeaderboardData(topIds, counts, 'received');
+  }, { 
+      fallbackData: [],
+      dedupingInterval: 60000 
+  });
+
+  // --- REALTIME SUBSCRIPTION ---
+  // When DB updates, we tell SWR to re-fetch (mutate) specific keys
   useEffect(() => {
-    // Chỉ chạy khi đã có currentUser từ context
-    if (currentUser) {
-        fetchUserStats();
-        fetchTopGivers();
-        fetchTopReceivers();
+    if (!currentUser) return;
 
-        // Realtime Subscription
-        const channel = supabase
-        .channel('right_sidebar_realtime')
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kudos' }, () => {
-            fetchTopGivers();
-        })
-        .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kudos_receivers' }, () => {
-            fetchTopReceivers();
-            fetchUserStats(); // Update stats của mình ngay lập tức
-        })
-        .subscribe();
+    const channel = supabase
+      .channel('right_sidebar_realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kudos' }, () => {
+          // New kudos sent -> Update Top Givers
+          mutate('top-givers');
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'kudos_receivers' }, () => {
+          // New receiver -> Update Top Receivers AND My Stats
+          mutate('top-receivers');
+          mutate(['my-stats', currentUser.id]);
+      })
+      .subscribe();
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }
-  }, [currentUser]); // Phụ thuộc vào currentUser từ context
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [currentUser]); // Dependencies
 
   // Component con (giữ nguyên)
-  const LeaderboardList = ({ title, data, icon: Icon }) => (
+  const LeaderboardList = ({ title, data = [], icon: Icon }) => (
     <div className="mb-8">
         <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-gray-900 flex items-center gap-2">

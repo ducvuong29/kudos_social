@@ -7,50 +7,72 @@ const UserContext = createContext();
 
 export const UserProvider = ({ children }) => {
   const supabase = createClient();
-  const [user, setUser] = useState(null);
-  const [profile, setProfile] = useState(null);
+  const [user, setUser] = useState(null); // User này sẽ chứa cả Auth + Profile
   const [isLoading, setIsLoading] = useState(true);
 
-  // Hàm fetch dữ liệu (có thể gọi lại khi cần reload)
+  // Hàm core để lấy dữ liệu
   const fetchUserData = async () => {
-    setIsLoading(true);
     try {
-      // 1. Get Auth User
       const { data: { user: authUser } } = await supabase.auth.getUser();
       
       if (authUser) {
-        setUser(authUser);
-        // 2. Get Profile Data
+        // Lấy thêm thông tin Profile
         const { data: profileData } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', authUser.id)
           .single();
           
-        setProfile(profileData);
+        // --- QUAN TRỌNG: GỘP DATA ---
+        // Gộp thông tin Auth (email, id) và Profile (avatar, name) thành 1 object
+        setUser({
+            ...authUser,       // Có id, email
+            ...profileData     // Có full_name, avatar_url, job_title
+        });
       } else {
         setUser(null);
-        setProfile(null);
       }
     } catch (error) {
       console.error('Lỗi tải user:', error);
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    // 1. Gọi lần đầu
     fetchUserData();
+
+    // 2. --- QUAN TRỌNG: LẮNG NGHE SỰ KIỆN AUTH ---
+    // Giúp đồng bộ state ngay khi Supabase nhận diện được session trong cookie/storage
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+           fetchUserData(); // Tải lại data nếu vừa đăng nhập xong
+        } else if (event === 'SIGNED_OUT') {
+           setUser(null);
+           setIsLoading(false);
+        }
+      }
+    );
+
+    return () => {
+      subscription.unsubscribe();
+    };
   }, []);
 
   return (
-    <UserContext.Provider value={{ user, profile, isLoading, refreshProfile: fetchUserData }}>
+    <UserContext.Provider value={{ 
+        user,           // Biến user này giờ đã đầy đủ thông tin
+        isLoading, 
+        refreshProfile: fetchUserData // Hàm để các trang khác gọi cập nhật (vd: sau khi edit profile)
+    }}>
       {children}
     </UserContext.Provider>
   );
 };
 
-// Hook custom để dùng nhanh ở các file khác
 export const useUser = () => {
   return useContext(UserContext);
 };

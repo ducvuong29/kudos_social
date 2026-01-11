@@ -6,14 +6,13 @@ import LeftSidebar from "@/components/layouts/LeftSidebar";
 import RightSidebar from "@/components/layouts/RightSidebar";
 import { usePathname } from 'next/navigation';
 import { UserProvider } from "@/context/UserContext"; // Đảm bảo đường dẫn đúng
-import { KudosProvider } from "@/context/KudosContext"; // <--- Import mới
 const inter = Inter({ subsets: ["latin"] });
 
 export default function RootLayout({ children }) {
   const pathname = usePathname();
 
   // Logic hiển thị Sidebar
-  const isLoginPage = pathname === '/login';
+  const isLoginPage = pathname === '/login' || pathname === '/register' || pathname === '/forgot-password';
   // Các trang khác ngoài login thì hiện sidebar (tùy chỉnh thêm nếu có trang khác)
   
   const isHomePage = pathname === '/'; 
@@ -25,8 +24,9 @@ export default function RootLayout({ children }) {
         {/* Bọc UserProvider ở ngoài cùng để toàn bộ app (kể cả Login hay Main) 
             đều truy cập được data user mà không cần fetch lại.
         */}
+        
         <UserProvider>
-          <KudosProvider>
+         
           {isLoginPage ? (
             // Layout cho trang Login (Full màn hình)
             <main className="min-h-screen bg-gray-50">
@@ -47,7 +47,7 @@ export default function RootLayout({ children }) {
               {isHomePage && <RightSidebar />}
             </div>
           )}
-          </KudosProvider>
+         
         </UserProvider>
       </body>
     </html>

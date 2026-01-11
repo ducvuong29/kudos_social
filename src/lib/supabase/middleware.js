@@ -19,7 +19,6 @@ export async function updateSession(request) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          // Logic này giúp đồng bộ cookie giữa Next.js và Supabase
           cookiesToSet.forEach(({ name, value, options }) =>
             request.cookies.set(name, value)
           )
@@ -35,17 +34,29 @@ export async function updateSession(request) {
   )
 
   // 3. Kiểm tra User hiện tại
+  // Dùng getUser() an toàn hơn getSession() trong middleware
   const { data: { user } } = await supabase.auth.getUser()
 
-  // 4. Logic bảo vệ Route (Redirect)
+  // Lấy đường dẫn hiện tại để check cho gọn code
+  const path = request.nextUrl.pathname
+
+  // --- 4. LOGIC BẢO VỆ ROUTE (CẬP NHẬT) ---
+
+  // A. Nếu CHƯA đăng nhập mà cố vào các trang nội bộ -> Đá về /login
+  // (Đã thêm /community vào danh sách bảo vệ)
+  const protectedRoutes = ['/', '/leaderboard', '/profile', '/community']
   
-  // Nếu chưa đăng nhập mà cố vào trang chủ (/) -> Đá về /login
-  if (!user && (request.nextUrl.pathname === '/' || request.nextUrl.pathname === '/leaderboard' || request.nextUrl.pathname === '/profile')) {
+  // Kiểm tra: Nếu path là trang chủ (/) HOẶC path bắt đầu bằng các route con (vd: /profile/123)
+  const isProtectedRoute = path === '/' || protectedRoutes.some(route => path.startsWith(route) && route !== '/')
+
+  if (!user && isProtectedRoute) {
     return NextResponse.redirect(new URL('/login', request.url))
   }
 
-  // Nếu đã đăng nhập mà cố vào /login -> Đá về trang chủ (/)
-  if (user && request.nextUrl.pathname.startsWith('/login')) {
+  // B. Nếu ĐÃ đăng nhập mà cố vào các trang Auth (Login/Register/Forgot) -> Đá về trang chủ
+  const authRoutes = ['/login', '/forgot-password']
+  
+  if (user && authRoutes.some(route => path.startsWith(route))) {
     return NextResponse.redirect(new URL('/', request.url))
   }
 

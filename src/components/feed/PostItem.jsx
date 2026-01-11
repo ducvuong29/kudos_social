@@ -10,19 +10,19 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { createClient } from '@/lib/supabase/client';
 import { formatDistanceToNow } from 'date-fns';
-import { vi } from 'date-fns/locale';
+import { vi } from 'date-fns/locale'; // Hoặc vi nếu bạn có config
 import { motion, AnimatePresence } from 'framer-motion';
 import confetti from 'canvas-confetti';
-import { useUser } from '@/context/UserContext'; // <--- Sử dụng Context
+import { useUser } from '@/context/UserContext'; 
 
 // --- CONSTANTS ---
 const REACTION_TYPES = [
-  { id: 'like', emoji: '👍', label: 'Thích', color: 'text-blue-600' },
-  { id: 'love', emoji: '❤️', label: 'Yêu', color: 'text-red-500' },
+  { id: 'like', emoji: '👍', label: 'Like', color: 'text-blue-600' },
+  { id: 'love', emoji: '❤️', label: 'Love', color: 'text-red-500' },
   { id: 'haha', emoji: '😆', label: 'Haha', color: 'text-yellow-500' },
   { id: 'wow',  emoji: '😮', label: 'Wow',  color: 'text-orange-500' },
-  { id: 'sad',  emoji: '😢', label: 'Buồn',  color: 'text-yellow-600' },
-  { id: 'angry', emoji: '😡', label: 'Phẫn nộ', color: 'text-red-700' },
+  { id: 'sad',  emoji: '😢', label: 'Sad',  color: 'text-yellow-600' },
+  { id: 'angry', emoji: '😡', label: 'Angry', color: 'text-red-700' },
 ];
 
 const getTagColor = (tag) => {
@@ -44,10 +44,11 @@ const triggerConfetti = () => {
   confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } });
 };
 
-// Bỏ prop currentUser vì đã lấy từ Context
 const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   const supabase = createClient();
-  const { user: currentUser } = useUser(); // Lấy user từ Context
+  
+  // Lấy user từ Context (đã bao gồm profile data)
+  const { user: currentUser } = useUser(); 
 
   // State nội bộ
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -84,7 +85,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
 
   // --- LOGIC REACTION ---
   const handleReaction = async (type) => {
-    if (!currentUser) return;
+    if (!currentUser) return; // Bảo vệ nếu chưa đăng nhập
 
     const existingReaction = post.reactions.find(r => r.user_id === currentUser.id);
     const isRemoving = existingReaction && existingReaction.type === type;
@@ -95,7 +96,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
         newReactions.push({ user_id: currentUser.id, type });
         triggerConfetti();
     }
-    // Cập nhật ngay UI thông qua Context (hàm onUpdate được truyền từ cha xuống)
+    // Cập nhật ngay UI thông qua Context
     onUpdate({ ...post, reactions: newReactions });
 
     // Gọi API
@@ -151,13 +152,11 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
         
     if (!error) {
         const updatedComments = [...(post.comments || []), newComment];
-        // Cập nhật UI thông qua Context
         onUpdate({ ...post, comments: updatedComments });
         
         setCommentInput('');
         setPendingMentions([]);
 
-        // Notification logic
         if (post.sender?.id !== currentUser.id) {
             await supabase.from('notifications').insert({ recipient_id: post.sender.id, sender_id: currentUser.id, type: 'comment', resource_id: post.id });
         }
@@ -188,7 +187,12 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
     <Card id={`post-${post.id}`} className="border-none shadow-sm hover:shadow-lg transition-shadow duration-300 bg-white rounded-3xl overflow-visible">
       <CardContent className="p-8">
         <div className="flex gap-5">
-          <Avatar className="w-12 h-12 border border-gray-100"><AvatarImage src={post.sender?.avatar_url}/><AvatarFallback>U</AvatarFallback></Avatar>
+          {/* Avatar Sender */}
+          <Avatar className="w-12 h-12 border border-gray-100">
+            <AvatarImage src={post.sender?.avatar_url}/>
+            <AvatarFallback>{post.sender?.full_name?.charAt(0) || 'U'}</AvatarFallback>
+          </Avatar>
+          
           <div className="flex-1">
             {/* Header Post */}
             <div className="flex justify-between mb-3 items-start relative">
@@ -198,19 +202,21 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                      <span className="text-gray-400 mx-1">sent kudos to</span> 
                      {renderRecipients(post.receiverList)}
                   </p>
-                  <p className="text-sm text-gray-400 mt-1">{formatDistanceToNow(new Date(post.created_at), { addSuffix: true, locale: vi })}</p>
+                  <p className="text-sm text-gray-400 mt-1">{formatDistanceToNow(new Date(post.created_at), { addSuffix: true })}</p>
                </div>
                <div className="flex items-center gap-2">
                   {post.tags?.[0] && <Badge className={`border-none px-3 py-1 text-sm ${getTagColor(post.tags[0])}`}>{post.tags[0]}</Badge>}
+                  
+                  {/* Menu Edit/Delete - Chỉ hiện khi là chủ bài viết */}
                   {currentUser?.id === post.sender?.id && (
                     <div className="relative">
-                       <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-full" onClick={() => setIsMenuOpen(!isMenuOpen)}><MoreHorizontal size={20}/></button>
-                       {isMenuOpen && (
-                          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 z-50">
-                             <button onClick={() => {setIsEditing(true); setIsMenuOpen(false)}} className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-blue-50 text-blue-600"><Edit2 size={14}/> Sửa</button>
-                             <button onClick={() => handleDeletePost()} className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-red-50 text-red-600"><Trash2 size={14}/> Xóa</button>
+                        <button className="p-2 text-gray-400 hover:bg-gray-100 rounded-full" onClick={() => setIsMenuOpen(!isMenuOpen)}><MoreHorizontal size={20}/></button>
+                        {isMenuOpen && (
+                          <div className="absolute right-0 top-full mt-1 w-32 bg-white rounded-xl shadow-xl border border-gray-100 z-50 overflow-hidden">
+                             <button onClick={() => {setIsEditing(true); setIsMenuOpen(false)}} className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-blue-50 text-blue-600 transition-colors"><Edit2 size={14}/> Edit</button>
+                             <button onClick={() => handleDeletePost()} className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-red-50 text-red-600 transition-colors"><Trash2 size={14}/> Delete</button>
                           </div>
-                       )}
+                        )}
                     </div>
                   )}
                </div>
@@ -219,10 +225,10 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
             {/* Content Post */}
             {isEditing ? (
                <div className="mb-5">
-                  <Textarea value={editMessage} onChange={e => setEditMessage(e.target.value)} className="mb-2 min-h-[100px] text-lg"/>
+                  <Textarea value={editMessage} onChange={e => setEditMessage(e.target.value)} className="mb-2 min-h-[100px] text-lg bg-gray-50"/>
                   <div className="flex gap-2 justify-end">
-                     <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>Hủy</Button>
-                     <Button size="sm" onClick={handleUpdatePost}>Lưu</Button>
+                     <Button size="sm" variant="ghost" onClick={() => setIsEditing(false)}>Cancel</Button>
+                     <Button size="sm" onClick={handleUpdatePost}>Save</Button>
                   </div>
                </div>
             ) : (
@@ -240,13 +246,13 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                </div>
             )}
             
-            {/* Tags */}
+            {/* Tags (Còn lại nếu có nhiều hơn 1) */}
             {post.tags?.length > 0 && <div className="flex flex-wrap gap-2 mb-5">{post.tags.map(t=><span key={t} className="text-sm font-medium px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg bg-opacity-50">#{t}</span>)}</div>}
 
             {/* Reactions Stats */}
             <div className="flex items-center justify-between py-3 border-t border-gray-50">
                <div className="flex items-center gap-2 text-sm text-gray-500">
-                  {Object.keys(reactionsCount).length > 0 && <div className="flex -space-x-2 mr-1">{Object.keys(reactionsCount).map(type => <div key={type} className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[12px]">{REACTION_TYPES.find(r=>r.id===type)?.emoji}</div>)}</div>}
+                  {Object.keys(reactionsCount).length > 0 && <div className="flex -space-x-2 mr-1">{Object.keys(reactionsCount).map(type => <div key={type} className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-[12px] shadow-sm ring-2 ring-white">{REACTION_TYPES.find(r=>r.id===type)?.emoji}</div>)}</div>}
                   <span>{post.reactions?.length || 0} reactions</span>
                </div>
                <div className="text-sm text-gray-500 cursor-pointer hover:underline" onClick={() => setShowComments(!showComments)}>{post.comments?.length || 0} comments</div>
@@ -259,12 +265,12 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                        {myReaction ? <span className="text-xl">{REACTION_TYPES.find(r=>r.id===myReaction)?.emoji}</span> : <ThumbsUp size={20}/>}
                        <span className="font-bold text-sm">{myReaction ? REACTION_TYPES.find(r=>r.id===myReaction)?.label : 'Like'}</span>
                    </button>
-                   <div className="absolute bottom-12 left-0 hidden group-hover:flex bg-white p-2 rounded-full shadow-xl gap-2 z-50">
-                       {REACTION_TYPES.map((r) => <button key={r.id} onClick={(e)=>{e.stopPropagation(); handleReaction(r.id)}} className="p-2 hover:scale-125 transition-transform text-2xl">{r.emoji}</button>)}
+                   <div className="absolute bottom-12 left-0 hidden group-hover:flex bg-white p-2 rounded-full shadow-xl gap-2 z-50 border border-gray-100 animate-in slide-in-from-bottom-2 fade-in">
+                       {REACTION_TYPES.map((r) => <button key={r.id} onClick={(e)=>{e.stopPropagation(); handleReaction(r.id)}} className="p-2 hover:scale-125 transition-transform text-2xl" title={r.label}>{r.emoji}</button>)}
                    </div>
                </div>
-               <button onClick={() => setShowComments(!showComments)} className="flex items-center gap-2 px-6 py-2.5 rounded-full text-gray-500 hover:bg-gray-100 hover:text-blue-600"><MessageSquare size={20} /> <span className="font-bold text-sm">Comment</span></button>
-               <button className="flex items-center gap-2 px-6 py-2.5 rounded-full text-gray-500 hover:bg-gray-100 ml-auto"><Share2 size={20} /></button>
+               <button onClick={() => setShowComments(!showComments)} className="flex items-center gap-2 px-6 py-2.5 rounded-full text-gray-500 hover:bg-gray-100 hover:text-blue-600 transition-colors"><MessageSquare size={20} /> <span className="font-bold text-sm">Comment</span></button>
+               <button className="flex items-center gap-2 px-6 py-2.5 rounded-full text-gray-500 hover:bg-gray-100 ml-auto transition-colors"><Share2 size={20} /></button>
             </div>
 
             {/* Comments Area */}
@@ -281,7 +287,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                                       <p className="text-sm font-bold text-gray-900 mb-1">{comment.user?.full_name}</p>
                                       <p className="text-sm text-gray-800">{comment.content}</p>
                                    </div>
-                                   <span className="text-xs text-gray-400 mt-1.5 ml-2 font-medium">{formatDistanceToNow(new Date(comment.created_at), { locale: vi })} trước</span>
+                                   <span className="text-xs text-gray-400 mt-1.5 ml-2 font-medium">{formatDistanceToNow(new Date(comment.created_at))} ago</span>
                                 </div>
                              </div>
                           ))}
@@ -290,19 +296,20 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                     
                     {/* Input Comment */}
                     <div className="flex gap-3 relative items-start">
-                       <Avatar className="w-9 h-9"><AvatarImage src={currentUser?.avatar_url}/></Avatar>
+                        {/* Avatar Current User */}
+                       <Avatar className="w-9 h-9"><AvatarImage src={currentUser?.avatar_url}/><AvatarFallback>U</AvatarFallback></Avatar>
                        <div className="flex-1 relative">
-                          <Input value={commentInput} onChange={handleCommentChange} onKeyDown={(e) => e.key === 'Enter' && submitComment()} placeholder="Write a comment..." className="bg-white rounded-full pr-12 py-5 shadow-sm"/>
+                          <Input value={commentInput} onChange={handleCommentChange} onKeyDown={(e) => e.key === 'Enter' && submitComment()} placeholder="Write a comment..." className="bg-white rounded-full pr-12 py-5 shadow-sm border-gray-200 focus:ring-1 focus:ring-blue-500"/>
                           {showMentionPopup && mentionResults.length > 0 && (
-                             <div className="absolute bottom-full left-0 w-64 mb-2 bg-white border rounded-xl shadow-xl z-50">
+                             <div className="absolute bottom-full left-0 w-64 mb-2 bg-white border rounded-xl shadow-xl z-50 overflow-hidden">
                                 {mentionResults.map(u => (
-                                   <div key={u.id} className="p-3 hover:bg-blue-50 cursor-pointer flex gap-3 items-center" onClick={() => insertMention(u)}>
+                                   <div key={u.id} className="p-3 hover:bg-blue-50 cursor-pointer flex gap-3 items-center transition-colors" onClick={() => insertMention(u)}>
                                       <Avatar className="w-8 h-8"><AvatarImage src={u.avatar_url}/></Avatar><span className="text-sm font-medium">{u.full_name}</span>
                                    </div>
                                 ))}
                              </div>
                           )}
-                          <button onClick={submitComment} className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-600 hover:bg-blue-50 p-2 rounded-full"><Send size={18} /></button>
+                          <button onClick={submitComment} className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-600 hover:bg-blue-50 p-2 rounded-full transition-colors"><Send size={18} /></button>
                        </div>
                     </div>
                  </motion.div>
