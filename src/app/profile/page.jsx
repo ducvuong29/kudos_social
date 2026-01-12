@@ -18,7 +18,6 @@ const ProfilePage = () => {
   const { user, isLoading: isLoadingUser, refreshProfile } = useUser();
   const { t } = useApp();
   
-  // Mặc định tab là 'received'
   const [activeTab, setActiveTab] = useState('received'); 
   const [searchQuery, setSearchQuery] = useState(''); 
 
@@ -65,63 +64,24 @@ const ProfilePage = () => {
           }
       }
       return { received: receivedCount || 0, given: givenCount || 0, streak: currentStreak };
-  }, {
-      fallbackData: { received: 0, given: 0, streak: 0 },
-      revalidateOnFocus: false
-  });
+  }, { fallbackData: { received: 0, given: 0, streak: 0 }, revalidateOnFocus: false });
 
-  // --- SWR FETCH POSTS (SỬA LẠI LOGIC FETCH RECEIVED) ---
+  // --- SWR FETCH POSTS ---
   const { data: posts, isLoading: loadingPosts, mutate: mutatePosts } = useSWR(
     user ? ['profile-posts', user.id, activeTab] : null, 
     async () => {
       const selectQuery = `*, sender:sender_id(full_name, avatar_url, id), recipients:kudos_receivers(user:user_id(full_name, avatar_url, id)), comments(id, content, created_at, user:user_id(full_name, avatar_url, id)), reactions(type, user_id)`;
       let dataToSet = [];
-      
-      const fetchGiven = async () => {
-          const { data } = await supabase.from('kudos').select(selectQuery).eq('sender_id', user.id).order('created_at', { ascending: false });
-          return data || [];
-      };
+      const fetchGiven = async () => { const { data } = await supabase.from('kudos').select(selectQuery).eq('sender_id', user.id).order('created_at', { ascending: false }); return data || []; };
+      const fetchReceived = async () => { const { data: refs } = await supabase.from('kudos_receivers').select('kudos_id').eq('user_id', user.id); const ids = refs ? refs.map(r => r.kudos_id) : []; if (ids.length === 0) return []; const { data } = await supabase.from('kudos').select(selectQuery).in('id', ids).order('created_at', { ascending: false }); return data || []; };
 
-      const fetchReceived = async () => {
-          // Lấy danh sách ID kudos mà user này nhận
-          const { data: refs } = await supabase.from('kudos_receivers').select('kudos_id').eq('user_id', user.id);
-          const ids = refs ? refs.map(r => r.kudos_id) : [];
-          
-          if (ids.length === 0) return []; // Nếu chưa nhận cái nào thì trả về rỗng ngay
+      if (activeTab === 'given') { dataToSet = await fetchGiven(); } 
+      else if (activeTab === 'received') { dataToSet = await fetchReceived(); } 
+      else if (activeTab === 'all') { const [givenData, receivedData] = await Promise.all([fetchGiven(), fetchReceived()]); const combinedMap = new Map(); [...givenData, ...receivedData].forEach(p => combinedMap.set(p.id, p)); dataToSet = Array.from(combinedMap.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at)); }
 
-          // Lấy chi tiết các kudos đó
-          const { data } = await supabase.from('kudos').select(selectQuery).in('id', ids).order('created_at', { ascending: false });
-          return data || [];
-      };
+      return dataToSet.map(p => ({ ...p, receiverList: p.recipients ? p.recipients.map(r => r.user) : [], image_urls: p.image_urls || (p.image_url ? [p.image_url] : []), comments: p.comments || [], reactions: p.reactions || [] }));
+  }, { dedupingInterval: 10000, revalidateOnFocus: false, revalidateOnMount: true });
 
-      if (activeTab === 'given') { 
-          dataToSet = await fetchGiven();
-      } 
-      else if (activeTab === 'received') { 
-          dataToSet = await fetchReceived(); 
-      } 
-      else if (activeTab === 'all') {
-          const [givenData, receivedData] = await Promise.all([fetchGiven(), fetchReceived()]);
-          // Gộp và loại bỏ trùng lặp (dùng Map)
-          const combinedMap = new Map();
-          [...givenData, ...receivedData].forEach(p => combinedMap.set(p.id, p));
-          dataToSet = Array.from(combinedMap.values()).sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-      }
-
-      return dataToSet.map(p => ({
-          ...p,
-          receiverList: p.recipients ? p.recipients.map(r => r.user) : [],
-          image_urls: p.image_urls || (p.image_url ? [p.image_url] : []),
-          comments: p.comments || [],
-          reactions: p.reactions || []
-      }));
-  }, {
-      dedupingInterval: 10000, // Giảm xuống 10s để test dễ hơn
-      revalidateOnFocus: false,
-      revalidateOnMount: true // Ép buộc fetch ngay khi vào trang
-  });
-
-  // --- LOGIC LỌC BÀI VIẾT ---
   const filteredPosts = posts?.filter(post => {
       if (!searchQuery) return true;
       const query = searchQuery.toLowerCase();
@@ -131,17 +91,52 @@ const ProfilePage = () => {
       return matchMessage || matchSender || matchReceiver;
   }) || [];
 
-  // --- HANDLERS (Giữ nguyên) ---
-  const handleUpdatePostList = async (updatedPost) => {
-      await mutatePosts(posts.map(p => p.id === updatedPost.id ? updatedPost : p), false);
-  };
-  const handleDeletePostList = async (postId) => {
-      await mutatePosts(posts.filter(p => p.id !== postId), false);
-  };
+  const handleUpdatePostList = async (updatedPost) => { await mutatePosts(posts.map(p => p.id === updatedPost.id ? updatedPost : p), false); };
+  const handleDeletePostList = async (postId) => { await mutatePosts(posts.filter(p => p.id !== postId), false); };
   const toggleShow = (field) => setShowPassword(prev => ({ ...prev, [field]: !prev[field] }));
   const handleAvatarChange = (e) => { const file = e.target.files[0]; if (file) { setAvatarFile(file); setPreviewUrl(URL.createObjectURL(file)); } };
-  const handleSaveProfile = async () => { /* ... Giữ nguyên logic save ... */ setIsSaving(true); try { let avatarUrl = formData.avatar_url; if (avatarFile) { const fileExt = avatarFile.name.split('.').pop(); const fileName = `${user.id}-${Date.now()}.${fileExt}`; const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, avatarFile); if (uploadError) throw uploadError; const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName); avatarUrl = publicUrl; } const updates = { id: user.id, full_name: formData.full_name, job_title: formData.job_title, department: formData.department, location: formData.location, bio: formData.bio, avatar_url: avatarUrl, updated_at: new Date(), }; const { error } = await supabase.from('profiles').upsert(updates); if (error) throw error; await refreshProfile(); setIsEditing(false); setAvatarFile(null); alert("Cập nhật thành công!"); } catch (error) { alert('Lỗi cập nhật: ' + error.message); } finally { setIsSaving(false); } };
-  const handleUpdatePassword = async () => { /* ... Giữ nguyên logic password ... */ const { currentPassword, newPassword, confirmPassword } = passData; if (!currentPassword || !newPassword || !confirmPassword) return alert("Vui lòng nhập đầy đủ các trường mật khẩu"); setLoadingPass(true); try { const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword }); if (verifyError) throw new Error("Mật khẩu hiện tại không chính xác!"); if (newPassword !== confirmPassword) throw new Error("Mật khẩu mới và xác nhận không khớp."); if (newPassword.length < 6) throw new Error("Mật khẩu mới phải có ít nhất 6 ký tự."); if (newPassword === currentPassword) throw new Error("Mật khẩu mới không được trùng với mật khẩu cũ."); const { error: updateError } = await supabase.auth.updateUser({ password: newPassword }); if (updateError) throw updateError; alert("Đổi mật khẩu thành công!"); setPassData({ currentPassword: '', newPassword: '', confirmPassword: '' }); } catch (error) { alert(error.message || "Lỗi đổi mật khẩu"); } finally { setLoadingPass(false); } };
+  
+  const handleSaveProfile = async () => {
+    setIsSaving(true);
+    try {
+      let avatarUrl = formData.avatar_url;
+      if (avatarFile) {
+        const fileExt = avatarFile.name.split('.').pop();
+        const fileName = `${user.id}-${Date.now()}.${fileExt}`;
+        const { error: uploadError } = await supabase.storage.from('avatars').upload(fileName, avatarFile);
+        if (uploadError) throw uploadError;
+        const { data: { publicUrl } } = supabase.storage.from('avatars').getPublicUrl(fileName);
+        avatarUrl = publicUrl;
+      }
+      const updates = { id: user.id, full_name: formData.full_name, job_title: formData.job_title, department: formData.department, location: formData.location, bio: formData.bio, avatar_url: avatarUrl, updated_at: new Date(), };
+      const { error } = await supabase.from('profiles').upsert(updates);
+      if (error) throw error;
+      await refreshProfile(); 
+      setIsEditing(false); setAvatarFile(null); alert("Cập nhật thành công!");
+    } catch (error) { alert('Lỗi cập nhật: ' + error.message); } finally { setIsSaving(false); }
+  };
+
+  const handleUpdatePassword = async () => {
+    const { currentPassword, newPassword, confirmPassword } = passData;
+    if (!currentPassword || !newPassword || !confirmPassword) return alert("Vui lòng nhập đầy đủ các trường mật khẩu");
+    setLoadingPass(true);
+    try {
+        const { error: verifyError } = await supabase.auth.signInWithPassword({ email: user.email, password: currentPassword });
+        if (verifyError) throw new Error("Mật khẩu hiện tại không chính xác!");
+        if (newPassword !== confirmPassword) throw new Error("Mật khẩu mới và xác nhận không khớp.");
+        if (newPassword.length < 6) throw new Error("Mật khẩu mới phải có ít nhất 6 ký tự.");
+        if (newPassword === currentPassword) throw new Error("Mật khẩu mới không được trùng với mật khẩu cũ.");
+        const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+        if (updateError) throw updateError;
+        alert("Đổi mật khẩu thành công!");
+        setPassData({ currentPassword: '', newPassword: '', confirmPassword: '' });
+    } catch (error) { alert(error.message || "Lỗi đổi mật khẩu"); } finally { setLoadingPass(false); }
+  };
+
+  // Hàm helper để gỡ readonly khi người dùng click vào
+  const handleFocusReadOnly = (e) => {
+    e.target.removeAttribute('readonly');
+  };
 
   if (isLoadingUser) return <div className="min-h-screen flex items-center justify-center dark:bg-slate-900"><Loader2 className="animate-spin text-blue-500 w-10 h-10" /></div>;
   if (!user) return <div className="min-h-screen flex items-center justify-center text-gray-500">Please log in to view your profile.</div>;
@@ -198,13 +193,22 @@ const ProfilePage = () => {
              <div className="flex items-center gap-4 ml-auto">
                <div className="relative hidden sm:block group">
                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                 <input 
-                    type="text" 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder={t.searchPlaceholder}
-                    className="pl-10 pr-4 h-10 w-48 lg:w-72 bg-gray-50/50 dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-full text-sm focus:bg-white dark:focus:bg-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 outline-none transition-all dark:text-white" 
-                 />
+                 
+                 {/* --- FIX 1: Bọc trong thẻ Form riêng biệt với role="search" --- */}
+                 <form role="search" autoComplete="off" onSubmit={(e) => e.preventDefault()}>
+                    <input 
+                        type="search" 
+                        name="search_query_final_fix"
+                        id="search_query_final_fix"
+                        autoComplete="off"
+                        data-1p-ignore="true" 
+                        
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder={t.searchPlaceholder}
+                        className="pl-10 pr-4 h-10 w-48 lg:w-72 bg-gray-50/50 dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-full text-sm focus:bg-white dark:focus:bg-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 outline-none transition-all dark:text-white" 
+                    />
+                 </form>
                </div>
                <NotificationList />
              </div>
@@ -238,28 +242,60 @@ const ProfilePage = () => {
              </div>
 
              <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 z-0 transition-colors">
-                <div className="flex items-center gap-2 mb-4 text-gray-900 dark:text-white"><Lock className="w-5 h-5 text-gray-700 dark:text-gray-300" /><h3 className="font-bold">{t.security}</h3></div>
-                <div className="space-y-4">
-                    {['current', 'new', 'confirm'].map((field, idx) => {
-                        const labels = ["Current Password", "New Password", "Confirm Password"];
-                        const keys = ["currentPassword", "newPassword", "confirmPassword"];
-                        return (
-                            <div key={field} className="relative">
-                                <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">{labels[idx]}</label>
-                                <div className="relative">
-                                    <input type={showPassword[field] ? "text" : "password"} value={passData[keys[idx]]} onChange={(e) => setPassData({...passData, [keys[idx]]: e.target.value})} 
-                                    className="w-full p-2.5 pr-10 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white" placeholder="..." />
-                                    <button type="button" onClick={() => toggleShow(field)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer">{showPassword[field] ? <EyeOff size={16} /> : <Eye size={16} />}</button>
-                                </div>
-                            </div>
-                        )
-                    })}
-                    <button onClick={handleUpdatePassword} disabled={loadingPass} className="w-full mt-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 py-2.5 rounded-lg font-semibold text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer">{loadingPass ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>} {t.updatePassword}</button>
+                <div className="flex items-center gap-2 mb-4 text-gray-900 dark:text-white">
+                    <Lock className="w-5 h-5 text-gray-700 dark:text-gray-300" />
+                    <h3 className="font-bold">{t.security}</h3>
                 </div>
+
+                {/* --- FIX 2: PASSWORD FORM ISOLATION + GHOST INPUTS --- */}
+                <form autoComplete="off" action="#">
+                    {/* Đây là các ô "mồi" để trình duyệt điền vào */}
+                    <div style={{position: 'absolute', opacity: 0, zIndex: -10}}>
+                        <input type="text" name="fake_username_to_catch_autofill" tabIndex={-1} defaultValue=" "/>
+                        <input type="password" name="fake_password_to_catch_autofill" tabIndex={-1} defaultValue=" "/>
+                    </div>
+
+                    <div className="space-y-4">
+                        {['current', 'new', 'confirm'].map((field, idx) => {
+                            const labels = ["Current Password", "New Password", "Confirm Password"];
+                            const keys = ["currentPassword", "newPassword", "confirmPassword"];
+                            return (
+                                <div key={field} className="relative">
+                                    <label className="text-xs font-medium text-gray-500 dark:text-gray-400 mb-1 block">{labels[idx]}</label>
+                                    <div className="relative">
+                                        <input 
+                                            // Dùng new-password cho tất cả
+                                            autoComplete="new-password"
+                                            name={`field_${field}_${Math.random().toString(36).substr(2, 5)}`}
+                                            
+                                            // Sử dụng readonly và bỏ khi focus
+                                            readOnly={true}
+                                            onFocus={handleFocusReadOnly}
+
+                                            type={showPassword[field] ? "text" : "password"} 
+                                            value={passData[keys[idx]]} 
+                                            onChange={(e) => setPassData({...passData, [keys[idx]]: e.target.value})} 
+                                            className="w-full p-2.5 pr-10 bg-gray-50 dark:bg-slate-700 border border-gray-200 dark:border-gray-600 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all dark:text-white" 
+                                            placeholder="..." 
+                                        />
+                                        <button type="button" onClick={() => toggleShow(field)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer">
+                                            {showPassword[field] ? <EyeOff size={16} /> : <Eye size={16} />}
+                                        </button>
+                                    </div>
+                                </div>
+                            )
+                        })}
+                        <button type="button" onClick={handleUpdatePassword} disabled={loadingPass} className="w-full mt-2 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/50 py-2.5 rounded-lg font-semibold text-sm transition-colors flex items-center justify-center gap-2 cursor-pointer">
+                            {loadingPass ? <Loader2 className="w-4 h-4 animate-spin"/> : <CheckCircle className="w-4 h-4"/>} {t.updatePassword}
+                        </button>
+                    </div>
+                </form>
              </div>
            </div>
 
+           {/* RIGHT COLUMN */}
            <div className="lg:col-span-8 space-y-6">
+             {/* ... (Phần hiển thị thống kê và bài viết giữ nguyên) */}
              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 hover:border-blue-300 transition-all group">
                  <div className="flex justify-between items-start mb-4">
