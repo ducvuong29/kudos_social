@@ -7,33 +7,47 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
 import { useApp } from "@/context/AppProvider";
+import { useDebounce } from "use-debounce";
+
+const UserCardSkeleton = () => (
+  <div className="bg-white dark:bg-slate-800 p-5 rounded-2xl border border-gray-100 dark:border-slate-700 animate-pulse">
+    <div className="flex items-start gap-4">
+      <div className="w-16 h-16 bg-gray-200 dark:bg-slate-700 rounded-2xl" />
+      <div className="flex-1 space-y-2">
+        <div className="h-5 bg-gray-200 dark:bg-slate-700 rounded w-3/4" />
+        <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded w-1/2" />
+      </div>
+    </div>
+    <div className="h-px bg-gray-100 dark:bg-slate-700 my-4" />
+    <div className="space-y-3">
+      <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded" />
+      <div className="h-4 bg-gray-200 dark:bg-slate-700 rounded" />
+    </div>
+  </div>
+);
 const CommunityPage = () => {
   const supabase = createClient();
   const { t } = useApp();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [debouncedSearch] = useDebounce(search, 500);
 
   useEffect(() => {
     const fetchUsers = async () => {
       setLoading(true);
       let query = supabase.from("profiles").select("*");
-
-      if (search) {
-        query = query.or(`full_name.ilike.%${search}%,email.ilike.%${search}%`);
+      if (debouncedSearch) {
+        query = query.or(
+          `full_name.ilike.%${debouncedSearch}%,email.ilike.%${debouncedSearch}%`
+        );
       }
-
       const { data, error } = await query;
       if (!error) setUsers(data || []);
       setLoading(false);
     };
-
-    const timeoutId = setTimeout(() => {
-      fetchUsers();
-    }, 500);
-
-    return () => clearTimeout(timeoutId);
-  }, [search]);
+    fetchUsers();
+  }, [debouncedSearch]);
 
   return (
     <div className="max-w-7xl mx-auto p-4 md:p-8 min-h-screen bg-gray-50/50 dark:bg-slate-900/50 transition-colors pb-24 md:pb-8">
@@ -63,9 +77,10 @@ const CommunityPage = () => {
 
       {/* --- LIST USERS --- */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <Loader2 className="animate-spin text-blue-600 dark:text-blue-400 w-10 h-10 mb-4" />
-          <p className="text-gray-400 font-medium">{t.loadingList}</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {[...Array(6)].map((_, i) => (
+            <UserCardSkeleton key={i} />
+          ))}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 md:gap-6">

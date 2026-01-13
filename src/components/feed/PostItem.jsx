@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ThumbsUp,
   MessageSquare,
@@ -24,6 +24,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import { useUser } from "@/context/UserContext";
 import { useApp } from "@/context/AppProvider";
+import Image from "next/image";
 
 // --- CONSTANTS ---
 const REACTION_TYPES = [
@@ -77,15 +78,25 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   const [activeCommentMenuId, setActiveCommentMenuId] = useState(null); // ID của comment đang mở menu
   const [editingCommentId, setEditingCommentId] = useState(null); // ID của comment đang sửa
   const [editCommentContent, setEditCommentContent] = useState(""); // Nội dung đang sửa
-
+  const [isDeleteConfirm, setIsDeleteConfirm] = useState(false);
+  const [confirmDeleteCommentId, setConfirmDeleteCommentId] = useState(null);
   // --- LOGIC POST ---
   const handleDeletePost = async () => {
-    if (!confirm("Bạn có chắc chắn muốn xóa bài viết này không?")) return;
-    const { error } = await supabase.from("kudos").delete().eq("id", post.id);
-    if (!error) onDelete(post.id);
-    else alert("Lỗi xóa: " + error.message);
-  };
+    // Không cần window.confirm hay e.preventDefault ở đây nữa
 
+    // 1. Đóng menu ngay để UI gọn gàng
+    setIsMenuOpen(false);
+
+    // 2. Gọi API xóa
+    const { error } = await supabase.from("kudos").delete().eq("id", post.id);
+
+    if (error) {
+      alert("Lỗi xóa: " + error.message);
+      setIsDeleteConfirm(false); // Reset lại nếu lỗi
+    } else {
+      onDelete(post.id); // Cập nhật UI thành công
+    }
+  };
   const handleUpdatePost = async () => {
     if (!editMessage.trim()) return alert("Nội dung trống!");
     const { error } = await supabase
@@ -224,24 +235,28 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
 
   // --- MỚI: LOGIC SỬA/XÓA COMMENT ---
   const handleDeleteComment = async (commentId) => {
-    if (!confirm("Bạn có chắc muốn xóa bình luận này?")) return;
+    // 1. Backup dữ liệu cũ để revert nếu lỗi
+    const previousComments = [...post.comments];
 
-    // 1. Cập nhật UI ngay lập tức (Optimistic update)
+    // 2. Optimistic Update (Ẩn comment ngay lập tức cho mượt)
     const updatedComments = post.comments.filter((c) => c.id !== commentId);
-
-    // GỌI HÀM CỦA CHA ĐỂ UPDATE SWR CACHE
     onUpdate({ ...post, comments: updatedComments });
-    setActiveCommentMenuId(null);
 
-    // 2. Gọi API xóa
+    // 3. Reset các state menu
+    setActiveCommentMenuId(null);
+    setConfirmDeleteCommentId(null);
+
+    // 4. Gọi API xóa thật
     const { error } = await supabase
       .from("comments")
       .delete()
       .eq("id", commentId);
 
+    // 5. Nếu lỗi thì khôi phục lại
     if (error) {
-      alert("Lỗi xóa comment: " + error.message);
-      // Nếu lỗi thì có thể reload lại trang hoặc revert state
+      console.error("Lỗi xóa comment:", error);
+      alert("Không xóa được comment: " + error.message);
+      onUpdate({ ...post, comments: previousComments }); // Hoàn tác
     }
   };
 
@@ -358,22 +373,64 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                       <MoreHorizontal size={20} />
                     </button>
                     {isMenuOpen && (
-                      <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
-                        <button
-                          onClick={() => {
-                            setIsEditing(true);
-                            setIsMenuOpen(false);
-                          }}
-                          className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-blue-50 dark:hover:bg-slate-800 text-blue-600 transition-colors cursor-pointer"
-                        >
-                          <Edit2 size={14} /> {t.edit}
-                        </button>
-                        <button
-                          onClick={() => handleDeletePost()}
-                          className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-red-50 dark:hover:bg-slate-800 text-red-600 transition-colors cursor-pointer"
-                        >
-                          <Trash2 size={14} /> {t.delete}
-                        </button>
+                      <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
+                        {/* Nút Edit (Giữ nguyên) */}
+                        {!isDeleteConfirm && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation(); // Chặn click lan ra ngoài
+                              setIsEditing(true);
+                              setIsMenuOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-blue-50 dark:hover:bg-slate-800 text-blue-600 transition-colors cursor-pointer"
+                          >
+                            <Edit2 size={14} /> {t.edit}
+                          </button>
+                        )}
+
+                        {/* LOGIC NÚT XÓA MỚI */}
+                        {!isDeleteConfirm ? (
+                          // TRẠNG THÁI 1: Hiện nút Xóa bình thường
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation(); // Chặn click lan ra ngoài
+                              setIsDeleteConfirm(true); // Chuyển sang chế độ xác nhận
+                            }}
+                            className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-red-50 dark:hover:bg-slate-800 text-red-600 transition-colors cursor-pointer"
+                          >
+                            <Trash2 size={14} /> {t.delete}
+                          </button>
+                        ) : (
+                          // TRẠNG THÁI 2: Hiện xác nhận "Chắc chắn xóa?"
+                          <div className="bg-red-50 dark:bg-red-900/10 p-2">
+                            <p className="text-xs text-red-600 px-2 mb-2 font-medium">
+                              Bạn chắc chứ?
+                            </p>
+                            <div className="flex gap-2 px-2 pb-1">
+                              {/* Nút HỦY */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setIsDeleteConfirm(false); // Quay lại
+                                }}
+                                className="flex-1 py-1.5 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100"
+                              >
+                                Hủy
+                              </button>
+
+                              {/* Nút XÓA THẬT */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeletePost(); // Gọi hàm xóa
+                                }}
+                                className="flex-1 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 font-bold"
+                              >
+                                Xóa
+                              </button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -430,10 +487,14 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                       if (onImageClick) onImageClick(img);
                     }}
                   >
-                    <img
+                    <Image
                       src={img}
-                      alt="post-image"
-                      className="absolute inset-0 w-full h-full object-cover hover:scale-105 transition-transform duration-500 cursor-pointer"
+                      alt={`post-image-${i}`}
+                      fill
+                      sizes="(max-width: 768px) 100vw, 50vw"
+                      className="object-cover hover:scale-105 transition-transform duration-500"
+                      loading="lazy"
+                      quality={85}
                     />
                     <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none" />
                   </div>
@@ -586,23 +647,64 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                                       </button>
 
                                       {activeCommentMenuId === comment.id && (
-                                        <div className="absolute right-0 top-full mt-1 w-28 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
-                                          <button
-                                            onClick={() =>
-                                              startEditingComment(comment)
-                                            }
-                                            className="w-full text-left px-3 py-2 text-xs flex gap-2 hover:bg-blue-50 dark:hover:bg-slate-800 text-blue-600 transition-colors cursor-pointer"
-                                          >
-                                            <Edit2 size={12} /> {t.edit}
-                                          </button>
-                                          <button
-                                            onClick={() =>
-                                              handleDeleteComment(comment.id)
-                                            }
-                                            className="w-full text-left px-3 py-2 text-xs flex gap-2 hover:bg-red-50 dark:hover:bg-slate-800 text-red-600 transition-colors cursor-pointer"
-                                          >
-                                            <Trash2 size={12} /> {t.delete}
-                                          </button>
+                                        <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
+                                          {/* LOGIC: Nếu ĐANG xác nhận xóa comment này -> Hiện nút Có/Không */}
+                                          {confirmDeleteCommentId ===
+                                          comment.id ? (
+                                            <div className="bg-red-50 dark:bg-red-900/20 p-1.5">
+                                              <p className="text-[10px] text-center text-red-600 font-bold mb-1">
+                                                Xóa thật?
+                                              </p>
+                                              <div className="flex gap-1">
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setConfirmDeleteCommentId(
+                                                      null
+                                                    ); // Hủy, quay lại menu thường
+                                                  }}
+                                                  className="flex-1 py-1 text-[10px] bg-white border rounded hover:bg-gray-100 text-gray-600"
+                                                >
+                                                  Hủy
+                                                </button>
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleDeleteComment(
+                                                      comment.id
+                                                    ); // Xóa thật
+                                                  }}
+                                                  className="flex-1 py-1 text-[10px] bg-red-600 text-white rounded hover:bg-red-700 font-bold"
+                                                >
+                                                  Xóa
+                                                </button>
+                                              </div>
+                                            </div>
+                                          ) : (
+                                            // LOGIC: Menu bình thường (Edit / Delete)
+                                            <>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  startEditingComment(comment);
+                                                }}
+                                                className="w-full text-left px-3 py-2 text-xs flex gap-2 hover:bg-blue-50 dark:hover:bg-slate-800 text-blue-600 transition-colors cursor-pointer"
+                                              >
+                                                <Edit2 size={12} /> {t.edit}
+                                              </button>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setConfirmDeleteCommentId(
+                                                    comment.id
+                                                  ); // Chuyển sang chế độ xác nhận
+                                                }}
+                                                className="w-full text-left px-3 py-2 text-xs flex gap-2 hover:bg-red-50 dark:hover:bg-slate-800 text-red-600 transition-colors cursor-pointer"
+                                              >
+                                                <Trash2 size={12} /> {t.delete}
+                                              </button>
+                                            </>
+                                          )}
                                         </div>
                                       )}
                                     </div>
@@ -717,4 +819,5 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   );
 };
 
+// Custom comparison để control chính xác khi nào re-render
 export default PostItem;
