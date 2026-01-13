@@ -10,23 +10,20 @@ import NotificationList from "@/components/common/NotificationList";
 import CreateKudos from "@/components/feed/CreateKudos";
 import PostItem from "@/components/feed/PostItem";
 import { useApp } from "@/context/AppProvider";
+
 const PAGE_SIZE = 10;
 
-// --- 1. SỬA FETCHER ĐỂ XỬ LÝ TÌM KIẾM ---
+// --- 1. FETCHER GIỮ NGUYÊN ---
 const fetcher = async (key) => {
-  // Key format: "feed_page_{pageIndex}_q_{searchQuery}"
   const parts = key.split("_q_");
   const pageIndex = parseInt(parts[0].split("_").pop());
-  const searchQuery = parts[1] || ""; // Lấy từ khóa tìm kiếm
+  const searchQuery = parts[1] || "";
 
   const start = pageIndex * PAGE_SIZE;
   const end = start + PAGE_SIZE - 1;
 
-  // console.log(`Fetching page ${pageIndex} [${searchQuery}]: ${start}-${end}`);
-
   const supabase = createClient();
 
-  // Tạo query cơ bản
   let query = supabase
     .from("kudos")
     .select(
@@ -41,9 +38,7 @@ const fetcher = async (key) => {
     .order("created_at", { ascending: false })
     .range(start, end);
 
-  // Áp dụng bộ lọc tìm kiếm (Nếu có)
   if (searchQuery) {
-    // Tìm kiếm trong nội dung tin nhắn (message)
     query = query.ilike("message", `%${searchQuery}%`);
   }
 
@@ -69,12 +64,11 @@ const NewsFeedPage = () => {
   const [viewingImage, setViewingImage] = useState(null);
   const loadMoreRef = useRef(null);
   const supabase = createClient();
-  const { t } = useApp(); // <--- SỬ DỤNG HOOK NGÔN NGỮ
-  // --- STATE CHO TÌM KIẾM ---
+  const { t } = useApp();
+
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Debounce logic: Đợi người dùng ngừng gõ 500ms mới tìm để đỡ gọi API nhiều
   useEffect(() => {
     const timer = setTimeout(() => {
       setDebouncedSearch(searchInput);
@@ -82,41 +76,27 @@ const NewsFeedPage = () => {
     return () => clearTimeout(timer);
   }, [searchInput]);
 
-  // --- 2. LOGIC GETKEY (Thêm Search Query vào Key) ---
   const getKey = (pageIndex, previousPageData) => {
-    // Tạo key chứa từ khóa tìm kiếm
     const keyBase = `feed_page_${pageIndex}_q_${debouncedSearch}`;
-
     if (pageIndex === 0) return keyBase;
-
-    // Nếu trang trước trả về rỗng -> Hết dữ liệu
     if (!previousPageData || previousPageData.length === 0) return null;
-
-    // Nếu trang trước trả về ít hơn PAGE_SIZE -> Hết dữ liệu
     if (previousPageData.length < PAGE_SIZE) return null;
-
     return keyBase;
   };
 
-  const { data, size, setSize, isLoading, mutate } = useSWRInfinite(
-    getKey,
-    fetcher,
-    {
+  const { data, size, setSize, isLoading, mutate, isValidating } =
+    useSWRInfinite(getKey, fetcher, {
       revalidateFirstPage: false,
       persistSize: true,
-      revalidateOnFocus: false,
-    }
-  );
+      revalidateOnFocus: false, // Tắt cái này để tránh flash lại list khi click thông báo
+    });
 
-  const kudosList = data ? [].concat(...data) : [];
+  const kudosList = data ? data.flat() : [];
+
+  // Logic check loading ổn định
   const isLoadingMore =
     isLoading || (size > 0 && data && typeof data[size - 1] === "undefined");
-
-  // --- 3. FIX LỖI REFERENCE ERROR TẠI ĐÂY ---
-  // Phải khai báo 'isEmpty' TRƯỚC khi dùng nó trong 'isReachingEnd' Ngăn chạy vô hạn
   const isEmpty = !isLoading && kudosList.length === 0;
-
-  // Dùng isEmpty ở dòng dưới này là an toàn
   const isReachingEnd =
     isEmpty || (data && data[data.length - 1]?.length < PAGE_SIZE);
 
@@ -124,51 +104,148 @@ const NewsFeedPage = () => {
     mutate();
   };
 
-  const deletePostFromList = async (postId) => {
-    await mutate(
-      (currentData) => {
-        // currentData là mảng các trang: [[post1, post2], [post3, post4]]
-        if (!currentData) return [];
+  // --- HÀM 1: XỬ LÝ KHI CÓ BÀI VIẾT MỚI (REALTIME) ---
+  const handleNewPostRealtime = async (newPostId) => {
+    // 1. Fetch đầy đủ thông tin của bài viết mới (kèm sender, receivers...)
+    const { data: newPostData, error } = await supabase
+      .from("kudos")
+      .select(
+        `
+        *, 
+        sender:sender_id(full_name, avatar_url, id), 
+        recipients:kudos_receivers(user:user_id(full_name, avatar_url, id)), 
+        comments(id, content, created_at, user:user_id(full_name, avatar_url, id)), 
+        reactions(type, user_id)
+      `
+      )
+      .eq("id", newPostId)
+      .single();
 
-        return currentData.map((page) => page.filter((p) => p.id !== postId));
-      },
-      false // quan trọng: false để không tự động fetch lại API ngay lập tức
-    );
+    if (error || !newPostData) return;
+
+    // 2. Format dữ liệu cho khớp với cấu trúc hiển thị
+    const formattedPost = {
+      ...newPostData,
+      receiverList: newPostData.recipients
+        ? newPostData.recipients.map((r) => r.user)
+        : [],
+      image_urls:
+        newPostData.image_urls ||
+        (newPostData.image_url ? [newPostData.image_url] : []),
+      comments: [],
+      reactions: [],
+    };
+
+    // 3. Cập nhật Cache SWR: Chèn bài mới vào đầu trang 1
+    await mutate((currentData) => {
+      if (!currentData) return [[formattedPost]];
+      const newFirstPage = [formattedPost, ...currentData[0]];
+      return [newFirstPage, ...currentData.slice(1)];
+    }, false);
+  };
+
+  // --- HÀM 2: XỬ LÝ KHI CÓ COMMENT MỚI (REALTIME) ---
+  const handleNewCommentRealtime = async (newCommentId) => {
+    // 1. Fetch thông tin comment kèm user
+    const { data: commentData, error } = await supabase
+      .from("comments")
+      .select(
+        `id, content, created_at, kudos_id, user:user_id(full_name, avatar_url, id)`
+      )
+      .eq("id", newCommentId)
+      .single();
+
+    if (error || !commentData) return;
+
+    // 2. Update vào post tương ứng trong Cache SWR
+    await mutate((currentData) => {
+      if (!currentData) return currentData;
+      return currentData.map((page) =>
+        page.map((post) => {
+          if (post.id === commentData.kudos_id) {
+            // Kiểm tra xem comment đã tồn tại chưa (tránh trùng lặp)
+            const exists = post.comments.some((c) => c.id === commentData.id);
+            if (exists) return post;
+
+            return {
+              ...post,
+              comments: [...post.comments, commentData],
+            };
+          }
+          return post;
+        })
+      );
+    }, false);
+  };
+
+  // --- SETUP REALTIME SUBSCRIPTION ---
+  useEffect(() => {
+    const channel = supabase
+      .channel("feed_realtime_updates")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "kudos" },
+        (payload) => {
+          // Nếu có bài mới insert -> Gọi hàm xử lý
+          handleNewPostRealtime(payload.new.id);
+        }
+      )
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "comments" },
+        (payload) => {
+          // Nếu có comment mới insert -> Gọi hàm xử lý
+          handleNewCommentRealtime(payload.new.id);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const deletePostFromList = async (postId) => {
+    await mutate((currentData) => {
+      if (!currentData) return [];
+      return currentData.map((page) => page.filter((p) => p.id !== postId));
+    }, false);
   };
 
   const updatePostInList = async (updatedPost) => {
-    await mutate(
-      (currentData) => {
-        if (!currentData) return [];
-
-        return currentData.map((page) =>
-          page.map((p) => {
-            if (p.id === updatedPost.id) {
-              return { ...p, ...updatedPost };
-            }
-            return p;
-          })
-        );
-      },
-      false // false để không fetch lại API
-    );
+    await mutate((currentData) => {
+      if (!currentData) return [];
+      return currentData.map((page) =>
+        page.map((p) =>
+          p.id === updatedPost.id ? { ...p, ...updatedPost } : p
+        )
+      );
+    }, false);
   };
 
-  // Logic Infinite Scroll
+  // Logic Infinite Scroll (Dùng ref để ổn định)
+  const isLoadingMoreRef = useRef(isLoadingMore);
   useEffect(() => {
+    isLoadingMoreRef.current = isLoadingMore;
+  }, [isLoadingMore]);
+
+  useEffect(() => {
+    if (isLoadingMore || isReachingEnd) return; // Chặn observer nếu đang load hoặc hết
+
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting && !isReachingEnd && !isLoadingMore) {
-          setSize(size + 1);
+        if (entries[0].isIntersecting && !isLoadingMoreRef.current) {
+          setSize((prev) => prev + 1);
         }
       },
-      { threshold: 1.0 }
+      { threshold: 0.1, rootMargin: "100px" }
     );
+
     if (loadMoreRef.current) observer.observe(loadMoreRef.current);
     return () => {
       if (loadMoreRef.current) observer.unobserve(loadMoreRef.current);
     };
-  }, [isReachingEnd, isLoadingMore, size, setSize]);
+  }, [isReachingEnd, setSize]); // Dependency tối giản
 
   // Reset scroll khi tìm kiếm
   useEffect(() => {
@@ -196,15 +273,13 @@ const NewsFeedPage = () => {
         </div>
       )}
 
-      {/* HEADER: Thêm dark:bg-slate-900/95 */}
+      {/* HEADER */}
       <div className="flex items-center justify-between mb-8 sticky top-0 bg-gray-50/95 dark:bg-slate-900/95 backdrop-blur-sm z-40 py-2 transition-colors">
         <div className="flex-1 max-w-2xl relative group">
           <Search
             className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-blue-500"
             size={20}
           />
-
-          {/* INPUT: Thêm dark:bg-slate-800 dark:text-white dark:border-gray-700 */}
           <Input
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
@@ -261,19 +336,25 @@ const NewsFeedPage = () => {
               </div>
             )}
 
-            <div
-              ref={loadMoreRef}
-              className="h-10 flex items-center justify-center w-full mt-4"
-            >
-              {isLoadingMore && (
-                <Loader2 className="animate-spin text-blue-500 w-6 h-6" />
-              )}
-              {isReachingEnd && kudosList.length > 0 && (
-                <p className="text-gray-400 dark:text-gray-500 text-sm">
-                  {t.endOfList}
-                </p>
-              )}
-            </div>
+            {/* LOAD MORE */}
+            {!isReachingEnd && (
+              <div
+                ref={loadMoreRef}
+                className="h-20 flex items-center justify-center w-full mt-4"
+              >
+                {isLoadingMore ? (
+                  <Loader2 className="animate-spin text-blue-500 w-6 h-6" />
+                ) : (
+                  <div className="h-4 w-full" />
+                )}
+              </div>
+            )}
+
+            {isReachingEnd && kudosList.length > 0 && (
+              <p className="text-center py-8 text-gray-400 dark:text-gray-500 text-sm">
+                {t.endOfList}
+              </p>
+            )}
           </>
         )}
       </div>
