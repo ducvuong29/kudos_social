@@ -164,7 +164,7 @@ const SetNewPasswordView = ({
                 value={newPassword}
                 onChange={(e) => handlePasswordChange(e.target.value)}
                 placeholder="Enter new password"
-                className="w-full pr-12 pl-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full pr-12 pl-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900"
               />
               <button
                 onClick={() => setShowNewPassword(!showNewPassword)}
@@ -220,7 +220,7 @@ const SetNewPasswordView = ({
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Repeat your password"
-                className="w-full pr-12 pl-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full pr-12 pl-4 py-3 border-2 border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all text-gray-900"
               />
               <button
                 onClick={() => setShowConfirmPassword(!showConfirmPassword)}
