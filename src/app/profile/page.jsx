@@ -316,11 +316,12 @@ const ProfilePage = () => {
     );
 
   return (
-    <div className="min-h-screen bg-gray-50/50 dark:bg-slate-900/50 pb-20 transition-colors">
+    <div className="min-h-screen bg-gray-50/50 dark:bg-slate-900/50 pb-24 md:pb-10 transition-colors">
+      {/* POPUP EDIT PROFILE (Giữ nguyên, chỉ thêm z-index cao) */}
       {isEditing && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-slate-800/50">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
+            <div className="px-6 py-4 border-b border-gray-100 dark:border-gray-700 flex justify-between items-center bg-gray-50 dark:bg-slate-800/50 shrink-0">
               <h3 className="font-bold text-lg text-gray-800 dark:text-white">
                 {t.editProfile}
               </h3>
@@ -328,7 +329,8 @@ const ProfilePage = () => {
                 <X className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 cursor-pointer" />
               </button>
             </div>
-            <div className="p-6 grid gap-6 max-h-[70vh] overflow-y-auto">
+            <div className="p-6 grid gap-6 overflow-y-auto">
+              {/* ... (Nội dung form giữ nguyên) ... */}
               <div className="flex flex-col items-center justify-center gap-4">
                 <div className="relative group">
                   <img
@@ -353,7 +355,7 @@ const ProfilePage = () => {
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {["Full Name", "Job Title", "Department", "Location"].map(
-                  (label, idx) => {
+                  (label) => {
                     const key = label.toLowerCase().replace(" ", "_");
                     return (
                       <div key={key} className="space-y-2">
@@ -386,7 +388,7 @@ const ProfilePage = () => {
                 </div>
               </div>
             </div>
-            <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-slate-800/50 flex justify-end gap-3">
+            <div className="p-4 border-t border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-slate-800/50 flex justify-end gap-3 shrink-0">
               <button
                 onClick={() => setIsEditing(false)}
                 className="px-4 py-2 text-gray-600 dark:text-gray-300 font-medium hover:bg-gray-200 dark:hover:bg-slate-700 rounded-lg cursor-pointer"
@@ -406,19 +408,19 @@ const ProfilePage = () => {
         </div>
       )}
 
+      {/* HEADER: Gọn gàng trên mobile */}
       <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 sticky top-0 z-40 transition-colors">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
             <div className="flex items-center gap-3">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white">
+              <h2 className="text-xl font-bold text-gray-800 dark:text-white truncate">
                 {t.myProfile}
               </h2>
             </div>
-            <div className="flex items-center gap-4 ml-auto">
-              <div className="relative hidden sm:block group">
+            {/* Search Bar & Noti: Chỉ hiện trên Desktop (vì mobile đã có ở chỗ khác) */}
+            <div className="flex items-center gap-4 ml-auto hidden md:flex">
+              <div className="relative group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-
-                {/* --- FIX 1: Bọc trong thẻ Form riêng biệt với role="search" --- */}
                 <form
                   role="search"
                   autoComplete="off"
@@ -426,14 +428,12 @@ const ProfilePage = () => {
                 >
                   <input
                     type="search"
-                    name="search_query_final_fix"
-                    id="search_query_final_fix"
+                    name="search_query_profile"
                     autoComplete="off"
-                    data-1p-ignore="true"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t.searchPlaceholder}
-                    className="pl-10 pr-4 h-10 w-48 lg:w-72 bg-gray-50/50 dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-full text-sm focus:bg-white dark:focus:bg-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 outline-none transition-all dark:text-white"
+                    className="pl-10 pr-4 h-10 w-64 bg-gray-50/50 dark:bg-slate-800 border border-gray-200 dark:border-gray-700 rounded-full text-sm focus:bg-white dark:focus:bg-slate-700 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 outline-none transition-all dark:text-white"
                   />
                 </form>
               </div>
@@ -443,75 +443,74 @@ const ProfilePage = () => {
         </div>
       </header>
 
-      <main className="px-4 sm:px-6 lg:px-8 py-8 max-w-7xl mx-auto">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+      <main className="px-4 sm:px-6 lg:px-8 py-4 md:py-8 max-w-7xl mx-auto">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
+          {/* LEFT COLUMN: 12 cột trên mobile, 4 cột trên desktop */}
           <div className="lg:col-span-4 space-y-6">
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden top-24 z-10 transition-colors">
-              <div className="h-32 bg-gradient-to-r from-blue-400 to-purple-500"></div>
-              <div className="px-6 pb-6 text-center -mt-16">
+            {/* Profile Info Card */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden z-10 transition-colors">
+              <div className="h-24 md:h-32 bg-gradient-to-r from-blue-400 to-purple-500"></div>
+              <div className="px-6 pb-6 text-center -mt-12 md:-mt-16">
                 <div className="relative inline-block">
                   <img
                     src={user?.avatar_url || "https://github.com/shadcn.png"}
                     alt="Profile"
-                    className="w-32 h-32 rounded-full border-4 border-white dark:border-slate-800 shadow-md object-cover bg-white dark:bg-slate-700"
+                    className="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-white dark:border-slate-800 shadow-md object-cover bg-white dark:bg-slate-700"
                   />
                 </div>
-                <div className="mt-4">
-                  <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
+                <div className="mt-3 md:mt-4">
+                  <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white">
                     {user?.full_name || "New User"}
                   </h2>
-                  <p className="text-blue-600 dark:text-blue-400 font-medium">
+                  <p className="text-sm md:text-base text-blue-600 dark:text-blue-400 font-medium">
                     {user?.job_title || "No Job Title"}
                   </p>
                 </div>
-                <div className="flex items-center justify-center gap-4 mt-4 text-sm text-gray-500 dark:text-gray-400">
-                  <div className="flex items-center gap-1">
-                    <Briefcase className="w-4 h-4" />{" "}
+                <div className="flex flex-wrap items-center justify-center gap-3 mt-4 text-sm text-gray-500 dark:text-gray-400">
+                  <div className="flex items-center gap-1 bg-gray-50 dark:bg-slate-700/50 px-3 py-1 rounded-full">
+                    <Briefcase className="w-3 h-3" />
                     <span>{user?.department || "No Dept"}</span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <MapPin className="w-4 h-4" />{" "}
+                  <div className="flex items-center gap-1 bg-gray-50 dark:bg-slate-700/50 px-3 py-1 rounded-full">
+                    <MapPin className="w-3 h-3" />
                     <span>{user?.location || "No Location"}</span>
                   </div>
                 </div>
                 {user?.bio && (
-                  <p className="mt-4 text-gray-600 dark:text-gray-300 text-sm leading-relaxed px-4 italic">
+                  <p className="mt-4 text-gray-600 dark:text-gray-300 text-sm leading-relaxed px-2 italic">
                     "{user.bio}"
                   </p>
                 )}
                 <button
                   onClick={() => setIsEditing(true)}
-                  className="mt-6 w-full bg-gray-900 dark:bg-white text-white dark:text-slate-900 py-2.5 rounded-xl font-semibold hover:bg-gray-800 dark:hover:bg-gray-200 transition-all flex items-center justify-center gap-2 shadow-lg shadow-gray-200 dark:shadow-none cursor-pointer"
+                  className="mt-6 w-full bg-gray-900 dark:bg-white text-white dark:text-slate-900 py-2.5 rounded-xl font-semibold hover:bg-gray-800 dark:hover:bg-gray-200 transition-all flex items-center justify-center gap-2 shadow-lg shadow-gray-200 dark:shadow-none cursor-pointer text-sm md:text-base"
                 >
                   <Edit className="w-4 h-4" /> {t.editProfile}
                 </button>
               </div>
             </div>
 
-            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-6 z-0 transition-colors">
+            {/* Security Card */}
+            <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 md:p-6 z-0 transition-colors">
               <div className="flex items-center gap-2 mb-4 text-gray-900 dark:text-white">
                 <Lock className="w-5 h-5 text-gray-700 dark:text-gray-300" />
                 <h3 className="font-bold">{t.security}</h3>
               </div>
-
-              {/* --- FIX 2: PASSWORD FORM ISOLATION + GHOST INPUTS --- */}
               <form autoComplete="off" action="#">
-                {/* Đây là các ô "mồi" để trình duyệt điền vào */}
                 <div style={{ position: "absolute", opacity: 0, zIndex: -10 }}>
                   <input
                     type="text"
-                    name="fake_username_to_catch_autofill"
+                    name="fake_username"
                     tabIndex={-1}
                     defaultValue=" "
                   />
                   <input
                     type="password"
-                    name="fake_password_to_catch_autofill"
+                    name="fake_password"
                     tabIndex={-1}
                     defaultValue=" "
                   />
                 </div>
-
                 <div className="space-y-4">
                   {["current", "new", "confirm"].map((field, idx) => {
                     const labels = [
@@ -531,12 +530,8 @@ const ProfilePage = () => {
                         </label>
                         <div className="relative">
                           <input
-                            // Dùng new-password cho tất cả
                             autoComplete="new-password"
-                            name={`field_${field}_${Math.random()
-                              .toString(36)
-                              .substr(2, 5)}`}
-                            // Sử dụng readonly và bỏ khi focus
+                            name={`field_${field}_random`}
                             readOnly={true}
                             onFocus={handleFocusReadOnly}
                             type={showPassword[field] ? "text" : "password"}
@@ -585,108 +580,86 @@ const ProfilePage = () => {
 
           {/* RIGHT COLUMN */}
           <div className="lg:col-span-8 space-y-6">
-            {/* ... (Phần hiển thị thống kê và bài viết giữ nguyên) */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 hover:border-blue-300 transition-all group">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/50 rounded-xl flex items-center justify-center group-hover:bg-blue-100 dark:group-hover:bg-blue-900 transition-colors">
-                    <Download className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+            {/* Stats Grid: Mobile 3 cột nhưng nhỏ */}
+            <div className="grid grid-cols-3 gap-2 md:gap-4">
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 md:p-5 shadow-sm border border-gray-200 dark:border-gray-700 text-center md:text-left transition-all">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-1 md:mb-4 items-center">
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-blue-50 dark:bg-blue-900/50 rounded-xl flex items-center justify-center mb-1 md:mb-0">
+                    <Download className="w-4 h-4 md:w-5 md:h-5 text-blue-600 dark:text-blue-400" />
                   </div>
-                  <span className="text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-full">
+                  <span className="hidden md:inline-block text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-full">
                     {t.total}
                   </span>
                 </div>
-                <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                <div className="text-xl md:text-3xl font-bold text-gray-900 dark:text-white">
                   {stats?.received}
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-[10px] md:text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
                   {t.kudosReceived}
                 </p>
               </div>
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 hover:border-purple-300 transition-all group">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="w-10 h-10 bg-purple-50 dark:bg-purple-900/50 rounded-xl flex items-center justify-center group-hover:bg-purple-100 dark:group-hover:bg-purple-900 transition-colors">
-                    <Upload className="w-5 h-5 text-purple-600 dark:text-purple-400" />
+
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 md:p-5 shadow-sm border border-gray-200 dark:border-gray-700 text-center md:text-left transition-all">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-1 md:mb-4 items-center">
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-purple-50 dark:bg-purple-900/50 rounded-xl flex items-center justify-center mb-1 md:mb-0">
+                    <Upload className="w-4 h-4 md:w-5 md:h-5 text-purple-600 dark:text-purple-400" />
                   </div>
-                  <span className="text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-full">
+                  <span className="hidden md:inline-block text-xs font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2 py-1 rounded-full">
                     {t.total}
                   </span>
                 </div>
-                <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                <div className="text-xl md:text-3xl font-bold text-gray-900 dark:text-white">
                   {stats?.given}
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-[10px] md:text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
                   {t.kudosGiven}
                 </p>
               </div>
-              <div className="bg-white dark:bg-slate-800 rounded-2xl p-5 shadow-sm border border-gray-200 dark:border-gray-700 hover:border-orange-300 transition-all group">
-                <div className="flex justify-between items-start mb-4">
-                  <div className="w-10 h-10 bg-orange-50 dark:bg-orange-900/50 rounded-xl flex items-center justify-center group-hover:bg-orange-100 dark:group-hover:bg-orange-900 transition-colors">
-                    <Flame className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+
+              <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 md:p-5 shadow-sm border border-gray-200 dark:border-gray-700 text-center md:text-left transition-all">
+                <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-1 md:mb-4 items-center">
+                  <div className="w-8 h-8 md:w-10 md:h-10 bg-orange-50 dark:bg-orange-900/50 rounded-xl flex items-center justify-center mb-1 md:mb-0">
+                    <Flame className="w-4 h-4 md:w-5 md:h-5 text-orange-600 dark:text-orange-400" />
                   </div>
-                  <span className="text-xs font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-1 rounded-full">
+                  <span className="hidden md:inline-block text-xs font-bold bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400 px-2 py-1 rounded-full">
                     {t.active}
                   </span>
                 </div>
-                <div className="text-3xl font-bold text-gray-900 dark:text-white">
+                <div className="text-xl md:text-3xl font-bold text-gray-900 dark:text-white">
                   {stats?.streak} Days
                 </div>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <p className="text-[10px] md:text-sm text-gray-500 dark:text-gray-400 mt-1 truncate">
                   {t.currentStreak}
                 </p>
               </div>
             </div>
 
+            {/* Posts List */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden min-h-[500px] transition-colors">
               <div className="flex border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-slate-800 z-10">
-                <button
-                  onClick={() => {
-                    setActiveTab("received");
-                    setSearchQuery("");
-                  }}
-                  className={`flex-1 py-4 text-sm font-semibold transition-colors relative cursor-pointer ${
-                    activeTab === "received"
-                      ? "text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20"
-                      : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  {t.received}{" "}
-                  {activeTab === "received" && (
-                    <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>
-                  )}
-                </button>
-                <button
-                  onClick={() => {
-                    setActiveTab("given");
-                    setSearchQuery("");
-                  }}
-                  className={`flex-1 py-4 text-sm font-semibold transition-colors relative cursor-pointer ${
-                    activeTab === "given"
-                      ? "text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20"
-                      : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  {t.given}{" "}
-                  {activeTab === "given" && (
-                    <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>
-                  )}
-                </button>
-                <button
-                  onClick={() => {
-                    setActiveTab("all");
-                    setSearchQuery("");
-                  }}
-                  className={`flex-1 py-4 text-sm font-semibold transition-colors relative cursor-pointer ${
-                    activeTab === "all"
-                      ? "text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20"
-                      : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
-                  }`}
-                >
-                  {t.allActivity}{" "}
-                  {activeTab === "all" && (
-                    <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>
-                  )}
-                </button>
+                {["received", "given", "all"].map((tab) => (
+                  <button
+                    key={tab}
+                    onClick={() => {
+                      setActiveTab(tab);
+                      setSearchQuery("");
+                    }}
+                    className={`flex-1 py-4 text-sm font-semibold transition-colors relative cursor-pointer ${
+                      activeTab === tab
+                        ? "text-blue-600 dark:text-blue-400 bg-blue-50/50 dark:bg-blue-900/20"
+                        : "text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700"
+                    }`}
+                  >
+                    {tab === "received"
+                      ? t.received
+                      : tab === "given"
+                      ? t.given
+                      : t.allActivity}
+                    {activeTab === tab && (
+                      <div className="absolute bottom-0 left-0 w-full h-0.5 bg-blue-600 dark:bg-blue-400"></div>
+                    )}
+                  </button>
+                ))}
               </div>
 
               <div className="p-4 sm:p-6 bg-gray-50/30 dark:bg-slate-900/50">

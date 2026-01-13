@@ -97,11 +97,11 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
     );
     // KIỂM TRA XEM REACTION CÓ THỂ LOẠI BỎ KHÔNG
     const isRemoving = existingReaction && existingReaction.type === type;
-    // LOẠI BỎ REACTION 
+    // LOẠI BỎ REACTION
     let newReactions = post.reactions.filter(
       (r) => r.user_id !== currentUser.id
     );
-    // NẾU KHÔNG LOẠI BỎ THÌ SẼ THÊM REACTION MỚI 
+    // NẾU KHÔNG LOẠI BỎ THÌ SẼ THÊM REACTION MỚI
     if (!isRemoving) {
       newReactions.push({ user_id: currentUser.id, type });
       triggerConfetti();
@@ -117,14 +117,12 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
         .from("reactions")
         .insert({ kudos_id: post.id, user_id: currentUser.id, type });
       if (post.sender?.id !== currentUser.id) {
-        await supabase
-          .from("notifications")
-          .insert({
-            recipient_id: post.sender.id,
-            sender_id: currentUser.id,
-            type: "reaction",
-            resource_id: post.id,
-          });
+        await supabase.from("notifications").insert({
+          recipient_id: post.sender.id,
+          sender_id: currentUser.id,
+          type: "reaction",
+          resource_id: post.id,
+        });
       }
     }
   };
@@ -161,7 +159,8 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
     const newText = words.join(" ") + ` @${user.full_name} ` + textAfter;
     setCommentInput(newText);
     setShowMentionPopup(false);
-    if (!pendingMentions.find((u) => u.id === user.id)) {  // DANH SÁCH NHỮNG NGƯỜI ĐANG ĐƯỢC MENTION CHỜ ĐƯỢC GỬI DB
+    if (!pendingMentions.find((u) => u.id === user.id)) {
+      // DANH SÁCH NHỮNG NGƯỜI ĐANG ĐƯỢC MENTION CHỜ ĐƯỢC GỬI DB
       setPendingMentions([...pendingMentions, user]);
     }
   };
@@ -183,18 +182,16 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
       const updatedComments = [...(post.comments || []), newComment];
       onUpdate({ ...post, comments: updatedComments });
 
-      setCommentInput("");     // CHỈ THAY ĐỔI TRONG LẦN RENDER TỚI 
+      setCommentInput(""); // CHỈ THAY ĐỔI TRONG LẦN RENDER TỚI
       setPendingMentions([]);
 
       if (post.sender?.id !== currentUser.id) {
-        await supabase
-          .from("notifications")
-          .insert({
-            recipient_id: post.sender.id,
-            sender_id: currentUser.id,
-            type: "comment",
-            resource_id: post.id,
-          });
+        await supabase.from("notifications").insert({
+          recipient_id: post.sender.id,
+          sender_id: currentUser.id,
+          type: "comment",
+          resource_id: post.id,
+        });
       }
 
       const processedIds = new Set();
@@ -203,14 +200,12 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
           commentInput.includes(user.full_name) &&
           !processedIds.has(user.id)
         ) {
-          await supabase
-            .from("notifications")
-            .insert({
-              recipient_id: user.id,
-              sender_id: currentUser.id,
-              type: "mention",
-              resource_id: post.id,
-            });
+          await supabase.from("notifications").insert({
+            recipient_id: user.id,
+            sender_id: currentUser.id,
+            type: "mention",
+            resource_id: post.id,
+          });
           processedIds.add(user.id);
         }
       }
@@ -249,26 +244,26 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   };
 
   return (
-    // CARD: dark:bg-slate-800
+    // CARD: rounded-2xl trên mobile, rounded-3xl trên desktop
     <Card
       id={`post-${post.id}`}
-      className="border-none shadow-sm hover:shadow-lg transition-shadow duration-300 bg-white dark:bg-slate-800 rounded-3xl overflow-visible transition-colors"
+      className="border-none shadow-sm hover:shadow-lg transition-shadow duration-300 bg-white dark:bg-slate-800 rounded-2xl md:rounded-3xl overflow-visible transition-colors"
     >
-      <CardContent className="p-8">
-        <div className="flex gap-5">
-          <Avatar className="w-12 h-12 border border-gray-100 dark:border-slate-700">
+      <CardContent className="p-4 md:p-8">
+        <div className="flex gap-3 md:gap-5">
+          <Avatar className="w-10 h-10 md:w-12 md:h-12 border border-gray-100 dark:border-slate-700">
             <AvatarImage src={post.sender?.avatar_url} />
             <AvatarFallback>
               {post.sender?.full_name?.charAt(0) || "U"}
             </AvatarFallback>
           </Avatar>
 
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             {/* Header Post */}
             <div className="flex justify-between mb-3 items-start relative">
               <div>
-                <p className="text-base text-gray-900 dark:text-white leading-snug">
-                  <span className="font-bold text-lg">
+                <p className="text-sm md:text-base text-gray-900 dark:text-white leading-snug break-words">
+                  <span className="font-bold text-base md:text-lg">
                     {post.sender?.full_name}
                   </span>
                   <span className="text-gray-400 dark:text-gray-500 mx-1">
@@ -276,16 +271,17 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                   </span>
                   {renderRecipients(post.receiverList)}
                 </p>
-                <p className="text-sm text-gray-400 dark:text-gray-500 mt-1">
+                <p className="text-xs md:text-sm text-gray-400 dark:text-gray-500 mt-1">
                   {formatDistanceToNow(new Date(post.created_at), {
                     addSuffix: true,
                   })}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
+              {/* Menu & Tags - Giữ nguyên, chỉ cần flex wrap nếu cần */}
+              <div className="flex items-center gap-2 shrink-0">
                 {post.tags?.[0] && (
                   <Badge
-                    className={`border-none px-3 py-1 text-sm ${getTagColor(
+                    className={`border-none px-2 py-0.5 md:px-3 md:py-1 text-xs md:text-sm whitespace-nowrap ${getTagColor(
                       post.tags[0]
                     )}`}
                   >
@@ -296,11 +292,12 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                 {currentUser?.id === post.sender?.id && (
                   <div className="relative">
                     <button
-                      className="p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full cursor-pointer"
+                      className="p-1.5 md:p-2 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full cursor-pointer"
                       onClick={() => setIsMenuOpen(!isMenuOpen)}
                     >
                       <MoreHorizontal size={20} />
                     </button>
+                    {/* ... (Dropdown Menu giữ nguyên) */}
                     {isMenuOpen && (
                       <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
                         <button
@@ -331,7 +328,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                 <Textarea
                   value={editMessage}
                   onChange={(e) => setEditMessage(e.target.value)}
-                  className="mb-2 min-h-[100px] text-lg bg-gray-50 dark:bg-slate-900 dark:text-white dark:border-slate-700"
+                  className="mb-2 min-h-[100px] text-base md:text-lg bg-gray-50 dark:bg-slate-900 dark:text-white dark:border-slate-700"
                 />
                 <div className="flex gap-2 justify-end">
                   <Button
@@ -352,7 +349,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                 </div>
               </div>
             ) : (
-              <p className="text-gray-800 dark:text-gray-200 mb-5 whitespace-pre-wrap text-lg leading-relaxed">
+              <p className="text-gray-800 dark:text-gray-200 mb-4 md:mb-5 whitespace-pre-wrap text-base md:text-lg leading-relaxed">
                 {post.message}
               </p>
             )}
@@ -360,7 +357,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
             {/* Images */}
             {post.image_urls?.length > 0 && (
               <div
-                className={`grid gap-3 mb-5 rounded-2xl overflow-hidden ${
+                className={`grid gap-2 md:gap-3 mb-4 md:mb-5 rounded-2xl overflow-hidden ${
                   post.image_urls.length > 1 ? "grid-cols-2" : "grid-cols-1"
                 }`}
               >
@@ -379,12 +376,13 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
               </div>
             )}
 
+            {/* Tags - flex wrap */}
             {post.tags?.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-5">
+              <div className="flex flex-wrap gap-2 mb-4 md:mb-5">
                 {post.tags.map((t) => (
                   <span
                     key={t}
-                    className="text-sm font-medium px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg bg-opacity-50"
+                    className="text-xs md:text-sm font-medium px-2.5 py-1 md:px-3 md:py-1.5 bg-blue-50 text-blue-600 rounded-lg bg-opacity-50"
                   >
                     #{t}
                   </span>
@@ -394,6 +392,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
 
             {/* Reactions Stats */}
             <div className="flex items-center justify-between py-3 border-t border-gray-50 dark:border-gray-700">
+              {/* ... (Giữ nguyên logic hiển thị icon reactions) */}
               <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                 {Object.keys(reactionsCount).length > 0 && (
                   <div className="flex -space-x-2 mr-1">
@@ -412,37 +411,38 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                 </span>
               </div>
               <div
-                className="text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:underline"
+                className="text-xs md:text-sm text-gray-500 dark:text-gray-400 cursor-pointer hover:underline"
                 onClick={() => setShowComments(!showComments)}
               >
                 {post.comments?.length || 0} {t.comments}
               </div>
             </div>
 
-            {/* Buttons */}
-            <div className="flex items-center gap-4 pt-3 border-t border-gray-50 dark:border-gray-700 relative ">
-              <div className="relative group pb-2">
+            {/* Buttons - THAY ĐỔI QUAN TRỌNG: Responsive padding và text */}
+            <div className="flex items-center justify-between md:justify-start gap-1 md:gap-4 pt-3 border-t border-gray-50 dark:border-gray-700 relative">
+              <div className="relative group pb-2 flex-1 md:flex-none">
                 <button
                   onClick={() => handleReaction(myReaction || "like")}
-                  className={`flex items-center gap-2 px-6 py-2.5 rounded-full cursor-pointer transition-colors ${
+                  className={`w-full md:w-auto flex items-center justify-center gap-1.5 md:gap-2 px-2 md:px-6 py-2 md:py-2.5 rounded-full cursor-pointer transition-colors ${
                     myReaction
                       ? "text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400"
                       : "text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700"
                   }`}
                 >
                   {myReaction ? (
-                    <span className="text-xl">
+                    <span className="text-lg md:text-xl">
                       {REACTION_TYPES.find((r) => r.id === myReaction)?.emoji}
                     </span>
                   ) : (
-                    <ThumbsUp size={20} />
+                    <ThumbsUp size={18} className="md:w-5 md:h-5" />
                   )}
-                  <span className="font-bold text-sm">
+                  <span className="font-bold text-xs md:text-sm">
                     {myReaction
                       ? REACTION_TYPES.find((r) => r.id === myReaction)?.label
                       : t.like}
                   </span>
                 </button>
+                {/* Popup reactions giữ nguyên */}
                 <div className="absolute bottom-12 left-0 hidden group-hover:flex bg-white dark:bg-slate-800 p-2 rounded-full shadow-xl gap-2 z-50 border border-gray-100 dark:border-gray-700 animate-in slide-in-from-bottom-2 fade-in">
                   {REACTION_TYPES.map((r) => (
                     <button
@@ -459,27 +459,36 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                   ))}
                 </div>
               </div>
+
               <button
                 onClick={() => setShowComments(!showComments)}
-                className="flex items-center gap-2 px-6 py-2.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-blue-600 transition-colors cursor-pointer"
+                className="flex-1 md:flex-none flex items-center justify-center gap-1.5 md:gap-2 px-2 md:px-6 py-2 md:py-2.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 hover:text-blue-600 transition-colors cursor-pointer"
               >
-                <MessageSquare size={20} />{" "}
-                <span className="font-bold text-sm">{t.comment}</span>
+                <MessageSquare size={18} className="md:w-5 md:h-5" />{" "}
+                <span className="font-bold text-xs md:text-sm">
+                  {t.comment}
+                </span>
               </button>
-              <button className="flex items-center gap-2 px-6 py-2.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 ml-auto transition-colors cursor-pointer">
-                <Share2 size={20} />
+
+              <button className="flex-1 md:flex-none flex items-center justify-center gap-1.5 md:gap-2 px-2 md:px-6 py-2 md:py-2.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer md:ml-auto">
+                <Share2 size={18} className="md:w-5 md:h-5" />
+                {/* Trên mobile hiện chữ share cho cân đối */}
+                <span className="font-bold text-xs md:text-sm md:hidden">
+                  Share
+                </span>
               </button>
             </div>
 
-            {/* Comments Area */}
+            {/* Comments Area - Giữ nguyên logic */}
             <AnimatePresence>
               {showComments && (
                 <motion.div
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: "auto" }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="mt-5 bg-gray-50 dark:bg-slate-900/50 rounded-2xl p-5"
+                  className="mt-4 md:mt-5 bg-gray-50 dark:bg-slate-900/50 rounded-2xl p-3 md:p-5"
                 >
+                  {/* ... (Logic hiển thị list comment giữ nguyên) */}
                   {post.comments?.length > 0 && (
                     <div className="space-y-5 mb-5 max-h-96 overflow-y-auto pr-2 custom-scrollbar ">
                       {post.comments.map((comment) => (
@@ -487,20 +496,20 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                           key={comment.id}
                           className="flex gap-3 group/comment"
                         >
-                          <Avatar className="w-9 h-9 mt-1">
+                          <Avatar className="w-8 h-8 md:w-9 md:h-9 mt-1">
                             <AvatarImage src={comment.user?.avatar_url} />
                             <AvatarFallback>U</AvatarFallback>
                           </Avatar>
                           <div className="flex-1">
-                            <div className="bg-white dark:bg-slate-800 p-4 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 dark:border-slate-700 relative">
-                              <p className="text-sm font-bold text-gray-900 dark:text-white mb-1">
+                            <div className="bg-white dark:bg-slate-800 p-3 md:p-4 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 dark:border-slate-700 relative">
+                              <p className="text-xs md:text-sm font-bold text-gray-900 dark:text-white mb-1">
                                 {comment.user?.full_name}
                               </p>
-                              <p className="text-sm text-gray-800 dark:text-gray-300">
+                              <p className="text-xs md:text-sm text-gray-800 dark:text-gray-300">
                                 {comment.content}
                               </p>
                             </div>
-                            <span className="text-xs text-gray-400 dark:text-gray-500 mt-1.5 ml-2 font-medium">
+                            <span className="text-[10px] md:text-xs text-gray-400 dark:text-gray-500 mt-1.5 ml-2 font-medium">
                               {formatDistanceToNow(
                                 new Date(comment.created_at)
                               )}{" "}
@@ -512,9 +521,8 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                     </div>
                   )}
 
-                  {/* Input Comment */}
-                  <div className="flex gap-3 relative items-start">
-                    <Avatar className="w-9 h-9">
+                  <div className="flex gap-2 md:gap-3 relative items-start">
+                    <Avatar className="w-8 h-8 md:w-9 md:h-9">
                       <AvatarImage src={currentUser?.avatar_url} />
                       <AvatarFallback>U</AvatarFallback>
                     </Avatar>
@@ -524,8 +532,9 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                         onChange={handleCommentChange}
                         onKeyDown={(e) => e.key === "Enter" && submitComment()}
                         placeholder={t.writeComment}
-                        className="bg-white dark:bg-slate-800 rounded-full pr-12 py-5 shadow-sm border-gray-200 dark:border-slate-700 focus:ring-1 focus:ring-blue-500 dark:text-white dark:placeholder:text-gray-500"
+                        className="bg-white dark:bg-slate-800 rounded-full pr-10 md:pr-12 py-4 md:py-5 shadow-sm border-gray-200 dark:border-slate-700 focus:ring-1 focus:ring-blue-500 dark:text-white dark:placeholder:text-gray-500 text-sm md:text-base"
                       />
+                      {/* ... (Logic mention popup giữ nguyên) */}
                       {showMentionPopup && mentionResults.length > 0 && (
                         <div className="absolute bottom-full left-0 w-64 mb-2 bg-white dark:bg-slate-800 border rounded-xl shadow-xl z-50 overflow-hidden dark:border-slate-700">
                           {mentionResults.map((u) => (
@@ -546,9 +555,9 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                       )}
                       <button
                         onClick={submitComment}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-blue-600 hover:bg-blue-50 p-2 rounded-full transition-colors cursor-pointer"
+                        className="absolute right-1.5 md:right-2 top-1/2 -translate-y-1/2 text-blue-600 hover:bg-blue-50 p-1.5 md:p-2 rounded-full transition-colors cursor-pointer"
                       >
-                        <Send size={18} />
+                        <Send size={16} className="md:w-[18px] md:h-[18px]" />
                       </button>
                     </div>
                   </div>

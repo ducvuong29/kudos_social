@@ -128,17 +128,17 @@ const LeaderboardPage = () => {
   const primaryColor = leaderboardType === "receivers" ? "blue" : "purple";
 
   return (
-    // CONTAINER: dark:bg-slate-900/50
-    <div className="min-h-screen bg-gray-50/50 dark:bg-slate-900/50 transition-colors">
-      {/* HEADER: dark:bg-slate-900/80 */}
+    <div className="min-h-screen bg-gray-50/50 dark:bg-slate-900/50 transition-colors pb-24 md:pb-10">
       <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200 dark:border-slate-800 sticky top-0 z-30 transition-colors">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-gray-800 dark:text-white">
+              <h2 className="text-lg md:text-xl font-bold text-gray-800 dark:text-white truncate">
                 {t.leaderboard}
               </h2>
-              <span className="text-gray-300 dark:text-slate-600">|</span>
+              <span className="text-gray-300 dark:text-slate-600 hidden sm:inline">
+                |
+              </span>
               <span className="text-sm font-medium text-gray-500 dark:text-gray-400 hidden sm:block">
                 {leaderboardType === "receivers"
                   ? t.mostAppreciated
@@ -147,9 +147,8 @@ const LeaderboardPage = () => {
             </div>
 
             <div className="flex items-center gap-4 ml-auto">
-              <div className="relative hidden sm:block group">
+              <div className="relative hidden md:block group">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
-                {/* INPUT */}
                 <input
                   type="text"
                   placeholder={t.findColleague}
@@ -158,47 +157,62 @@ const LeaderboardPage = () => {
                   className="pl-10 pr-4 h-10 w-48 bg-gray-100/50 dark:bg-slate-800 border border-transparent dark:border-slate-700 focus:bg-white dark:focus:bg-slate-700 focus:border-blue-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-100 dark:focus:ring-blue-900 transition-all dark:text-white dark:placeholder:text-gray-500"
                 />
               </div>
-              <NotificationList />
+              {/* Notification ẩn trên mobile */}
+              <div className="hidden md:block">
+                <NotificationList />
+              </div>
             </div>
           </div>
         </div>
       </header>
 
-      <main className="px-4 sm:px-6 lg:px-8 py-8 max-w-7xl mx-auto">
+      <main className="px-4 sm:px-6 lg:px-8 py-4 md:py-8 max-w-7xl mx-auto">
+        {/* Search input for Mobile */}
+        <div className="md:hidden mb-4 relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder={t.findColleague}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-10 pr-4 h-10 rounded-full bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+          />
+        </div>
+
         {/* Controls Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-10">
-          {/* SWITCHER */}
-          <div className="bg-white dark:bg-slate-800 p-1 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 inline-flex self-start md:self-auto transition-colors">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+          {/* SWITCHER: Full width on mobile */}
+          <div className="bg-white dark:bg-slate-800 p-1 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 flex md:inline-flex transition-colors">
             <button
               onClick={() => setLeaderboardType("receivers")}
-              className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 md:px-5 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all cursor-pointer ${
                 leaderboardType === "receivers"
                   ? "bg-blue-600 text-white shadow-md"
                   : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700"
               }`}
             >
-              <Medal className="w-4 h-4" />
+              <Medal className="w-3 h-3 md:w-4 md:h-4" />
               {t.topReceivers}
             </button>
             <button
               onClick={() => setLeaderboardType("givers")}
-              className={`flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+              className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-4 md:px-5 py-2 rounded-lg text-xs md:text-sm font-semibold transition-all cursor-pointer ${
                 leaderboardType === "givers"
                   ? "bg-purple-600 text-white shadow-md"
                   : "text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-700"
               }`}
             >
-              <Gift className="w-4 h-4" />
+              <Gift className="w-3 h-3 md:w-4 md:h-4" />
               {t.topGivers}
             </button>
           </div>
-          {/* TIME FILTER */}
-          <div className="flex items-center gap-1 bg-gray-200/50 dark:bg-slate-800 p-1 rounded-lg self-start md:self-auto transition-colors">
+          {/* TIME FILTER: Scrollable on mobile */}
+          <div className="flex items-center gap-1 bg-gray-200/50 dark:bg-slate-800 p-1 rounded-lg w-full md:w-auto overflow-x-auto no-scrollbar">
             {["week", "month", "all"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setTimeFilter(tab)}
-                className={`px-3 py-1.5 rounded-md text-xs font-bold capitalize transition-all cursor-pointer ${
+                className={`flex-1 md:flex-none px-3 py-1.5 rounded-md text-xs font-bold capitalize transition-all cursor-pointer whitespace-nowrap ${
                   timeFilter === tab
                     ? "bg-white dark:bg-slate-700 text-gray-900 dark:text-white shadow-sm"
                     : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
@@ -222,7 +236,7 @@ const LeaderboardPage = () => {
         ) : (
           <>
             {displayTopThree.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-8 mb-12 items-end animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className="grid grid-cols-3 gap-2 md:gap-4 lg:gap-8 mb-8 md:mb-12 items-end animate-in fade-in slide-in-from-bottom-4 duration-700">
                 {[displayTopThree[1], displayTopThree[0], displayTopThree[2]]
                   .filter(Boolean)
                   .map((person) => (
@@ -230,17 +244,15 @@ const LeaderboardPage = () => {
                       key={person.id}
                       className={`relative group ${
                         person.rank === 1
-                          ? "md:order-2 md:-mt-8"
+                          ? "order-2 -mt-4 md:-mt-8"
                           : person.rank === 2
-                          ? "md:order-1"
-                          : "md:order-3"
+                          ? "order-1"
+                          : "order-3"
                       }`}
                     >
-                      {/* --- 2. WRAP LINK CHO PHẦN TOP 3 --- */}
                       <Link href={`/profile/${person.id}`} className="block">
-                        {/* PODIUM CARD */}
                         <div
-                          className={`bg-white dark:bg-slate-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all duration-300 cursor-pointer text-center relative overflow-hidden ${
+                          className={`bg-white dark:bg-slate-800 rounded-xl md:rounded-2xl p-3 md:p-6 shadow-sm border border-gray-100 dark:border-slate-700 hover:shadow-xl transition-all duration-300 cursor-pointer text-center relative overflow-hidden ${
                             person.isMe
                               ? "ring-2 ring-offset-2 ring-blue-500 dark:ring-offset-slate-900"
                               : ""
@@ -249,9 +261,9 @@ const LeaderboardPage = () => {
                           {person.rank === 1 && (
                             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-yellow-300 via-yellow-500 to-yellow-300" />
                           )}
-                          <div className="relative inline-block mb-4 mt-2">
+                          <div className="relative inline-block mb-2 md:mb-4 mt-1 md:mt-2">
                             <Avatar
-                              className={`w-20 h-20 lg:w-24 lg:h-24 border-4 ${
+                              className={`w-14 h-14 md:w-20 md:h-20 lg:w-24 lg:h-24 border-4 ${
                                 person.rank === 1
                                   ? "border-yellow-100 dark:border-yellow-900"
                                   : person.rank === 2
@@ -265,7 +277,7 @@ const LeaderboardPage = () => {
                               </AvatarFallback>
                             </Avatar>
                             <div
-                              className={`absolute -bottom-3 left-1/2 transform -translate-x-1/2 w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-sm border-4 border-white dark:border-slate-800 shadow-md ${
+                              className={`absolute -bottom-2 md:-bottom-3 left-1/2 transform -translate-x-1/2 w-6 h-6 md:w-8 md:h-8 rounded-full flex items-center justify-center font-bold text-white text-xs md:text-sm border-2 md:border-4 border-white dark:border-slate-800 shadow-md ${
                                 person.rank === 1
                                   ? "bg-yellow-500"
                                   : person.rank === 2
@@ -276,21 +288,21 @@ const LeaderboardPage = () => {
                               {person.rank}
                             </div>
                           </div>
-                          <h3 className="text-lg font-bold text-gray-900 dark:text-white mt-2 truncate">
+                          <h3 className="text-xs md:text-lg font-bold text-gray-900 dark:text-white mt-1 md:mt-2 truncate px-1">
                             {person.name}
                           </h3>
-                          <p className="text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-3">
+                          <p className="text-[10px] md:text-xs font-semibold text-gray-400 dark:text-gray-500 uppercase tracking-wider mb-2 md:mb-3 truncate">
                             {person.department}
                           </p>
                           <div
-                            className={`inline-flex flex-col items-center justify-center px-6 py-2 rounded-xl bg-gray-50 dark:bg-slate-700/50 group-hover:bg-${primaryColor}-50 dark:group-hover:bg-${primaryColor}-900/20 transition-colors`}
+                            className={`inline-flex flex-col items-center justify-center px-2 md:px-6 py-1 md:py-2 rounded-lg md:rounded-xl bg-gray-50 dark:bg-slate-700/50 group-hover:bg-${primaryColor}-50 dark:group-hover:bg-${primaryColor}-900/20 transition-colors w-full`}
                           >
                             <span
-                              className={`text-2xl font-bold text-${primaryColor}-600 dark:text-${primaryColor}-400`}
+                              className={`text-sm md:text-2xl font-bold text-${primaryColor}-600 dark:text-${primaryColor}-400`}
                             >
                               {person.points}
                             </span>
-                            <span className="text-xs text-gray-500 dark:text-gray-400 font-medium">
+                            <span className="text-[9px] md:text-xs text-gray-500 dark:text-gray-400 font-medium hidden md:inline">
                               {leaderboardType === "receivers"
                                 ? t.received
                                 : t.given}
@@ -304,11 +316,10 @@ const LeaderboardPage = () => {
             )}
 
             {/* --- LIST --- */}
-            {/* LIST CONTAINER */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden transition-colors">
-              <div className="grid grid-cols-12 gap-4 px-6 py-4 bg-gray-50/80 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+              <div className="grid grid-cols-12 gap-2 md:gap-4 px-4 md:px-6 py-3 md:py-4 bg-gray-50/80 dark:bg-slate-900/50 border-b border-gray-200 dark:border-slate-700 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                 <div className="col-span-2 sm:col-span-1">{t.rank}</div>
-                <div className="col-span-6 sm:col-span-5">{t.colleague}</div>
+                <div className="col-span-7 sm:col-span-5">{t.colleague}</div>
                 <div className="hidden sm:block sm:col-span-3">
                   {t.department}
                 </div>
@@ -329,20 +340,19 @@ const LeaderboardPage = () => {
                   </div>
                 ) : (
                   displayOthers.map((person) => (
-                    // --- 3. WRAP LINK CHO PHẦN LIST ---
                     <Link
                       key={person.id}
                       href={`/profile/${person.id}`}
                       className="block group"
                     >
                       <div
-                        className={`grid grid-cols-12 gap-4 px-6 py-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors items-center ${
+                        className={`grid grid-cols-12 gap-2 md:gap-4 px-4 md:px-6 py-3 md:py-4 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors items-center ${
                           person.isMe ? "bg-blue-50/60 dark:bg-blue-900/20" : ""
                         }`}
                       >
                         <div className="col-span-2 sm:col-span-1">
                           <span
-                            className={`text-sm font-bold w-6 h-6 flex items-center justify-center ${
+                            className={`text-xs md:text-sm font-bold w-6 h-6 flex items-center justify-center ${
                               person.rank <= 3
                                 ? "text-yellow-600 bg-yellow-50 dark:bg-yellow-900/30 dark:text-yellow-400 rounded-full"
                                 : "text-gray-500 dark:text-gray-400"
@@ -351,23 +361,23 @@ const LeaderboardPage = () => {
                             #{person.rank}
                           </span>
                         </div>
-                        <div className="col-span-6 sm:col-span-5 flex items-center gap-3">
-                          <Avatar className="w-9 h-9 border border-gray-100 dark:border-slate-600">
+                        <div className="col-span-7 sm:col-span-5 flex items-center gap-3">
+                          <Avatar className="w-8 h-8 md:w-9 md:h-9 border border-gray-100 dark:border-slate-600">
                             <AvatarImage src={person.avatar} />
                             <AvatarFallback>
                               {person.name.charAt(0)}
                             </AvatarFallback>
                           </Avatar>
                           <div className="min-w-0">
-                            <div className="font-semibold text-gray-900 dark:text-gray-200 flex items-center gap-2 text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
+                            <div className="font-semibold text-gray-900 dark:text-gray-200 flex items-center gap-2 text-sm group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors truncate">
                               {person.name}{" "}
                               {person.isMe && (
-                                <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-700 font-bold">
+                                <span className="bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 text-[10px] px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-700 font-bold hidden md:inline-block">
                                   YOU
                                 </span>
                               )}
                             </div>
-                            <div className="sm:hidden text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            <div className="sm:hidden text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 truncate">
                               {person.department}
                             </div>
                           </div>
