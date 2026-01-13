@@ -13,7 +13,7 @@ import { useApp } from "@/context/AppProvider";
 
 const PAGE_SIZE = 10;
 
-// --- 1. FETCHER GIỮ NGUYÊN ---
+// --- 1. CẬP NHẬT FETCHER (Lấy thêm id cho reactions) ---
 const fetcher = async (key) => {
   const parts = key.split("_q_");
   const pageIndex = parseInt(parts[0].split("_").pop());
@@ -32,9 +32,10 @@ const fetcher = async (key) => {
       sender:sender_id(full_name, avatar_url, id), 
       recipients:kudos_receivers(user:user_id(full_name, avatar_url, id)), 
       comments(id, content, created_at, user:user_id(full_name, avatar_url, id)), 
-      reactions(type, user_id)
+      reactions(id, type, user_id) 
     `
     )
+    // ^^^ LƯU Ý: Đã thêm 'id' vào trong reactions(...)
     .order("created_at", { ascending: false })
     .range(start, end);
 
@@ -88,12 +89,11 @@ const NewsFeedPage = () => {
     useSWRInfinite(getKey, fetcher, {
       revalidateFirstPage: false,
       persistSize: true,
-      revalidateOnFocus: false, // Tắt cái này để tránh flash lại list khi click thông báo
+      revalidateOnFocus: false,
     });
 
   const kudosList = data ? data.flat() : [];
 
-  // Logic check loading ổn định
   const isLoadingMore =
     isLoading || (size > 0 && data && typeof data[size - 1] === "undefined");
   const isEmpty = !isLoading && kudosList.length === 0;
@@ -104,9 +104,8 @@ const NewsFeedPage = () => {
     mutate();
   };
 
-  // --- HÀM 1: XỬ LÝ KHI CÓ BÀI VIẾT MỚI (REALTIME) ---
+  // --- HÀM 1: XỬ LÝ POST MỚI ---
   const handleNewPostRealtime = async (newPostId) => {
-    // 1. Fetch đầy đủ thông tin của bài viết mới (kèm sender, receivers...)
     const { data: newPostData, error } = await supabase
       .from("kudos")
       .select(
@@ -115,7 +114,7 @@ const NewsFeedPage = () => {
         sender:sender_id(full_name, avatar_url, id), 
         recipients:kudos_receivers(user:user_id(full_name, avatar_url, id)), 
         comments(id, content, created_at, user:user_id(full_name, avatar_url, id)), 
-        reactions(type, user_id)
+        reactions(id, type, user_id)
       `
       )
       .eq("id", newPostId)
@@ -123,7 +122,6 @@ const NewsFeedPage = () => {
 
     if (error || !newPostData) return;
 
-    // 2. Format dữ liệu cho khớp với cấu trúc hiển thị
     const formattedPost = {
       ...newPostData,
       receiverList: newPostData.recipients
@@ -136,7 +134,6 @@ const NewsFeedPage = () => {
       reactions: [],
     };
 
-    // 3. Cập nhật Cache SWR: Chèn bài mới vào đầu trang 1
     await mutate((currentData) => {
       if (!currentData) return [[formattedPost]];
       const newFirstPage = [formattedPost, ...currentData[0]];
@@ -144,9 +141,8 @@ const NewsFeedPage = () => {
     }, false);
   };
 
-  // --- HÀM 2: XỬ LÝ KHI CÓ COMMENT MỚI (REALTIME) ---
+  // --- HÀM 2: XỬ LÝ COMMENT MỚI ---
   const handleNewCommentRealtime = async (newCommentId) => {
-    // 1. Fetch thông tin comment kèm user
     const { data: commentData, error } = await supabase
       .from("comments")
       .select(
@@ -157,21 +153,67 @@ const NewsFeedPage = () => {
 
     if (error || !commentData) return;
 
-    // 2. Update vào post tương ứng trong Cache SWR
     await mutate((currentData) => {
       if (!currentData) return currentData;
       return currentData.map((page) =>
         page.map((post) => {
           if (post.id === commentData.kudos_id) {
-            // Kiểm tra xem comment đã tồn tại chưa (tránh trùng lặp)
             const exists = post.comments.some((c) => c.id === commentData.id);
             if (exists) return post;
-
             return {
               ...post,
               comments: [...post.comments, commentData],
             };
           }
+          return post;
+        })
+      );
+    }, false);
+  };
+
+  // --- HÀM 3: XỬ LÝ REACTION MỚI (UPDATE/DELETE/INSERT) ---
+  const handleReactionRealtime = async (payload) => {
+    const { eventType, new: newRecord, old: oldRecord } = payload;
+
+    await mutate((currentData) => {
+      if (!currentData) return currentData;
+
+      return currentData.map((page) =>
+        page.map((post) => {
+          // TRƯỜNG HỢP 1: INSERT hoặc UPDATE (Có newRecord)
+          if ((eventType === "INSERT" || eventType === "UPDATE") && newRecord) {
+            // Kiểm tra xem Reaction này có thuộc bài post này không
+            if (post.id === newRecord.kudos_id) {
+              // Lọc bỏ reaction cũ của user này (nếu có) để tránh trùng
+              // Hoặc nếu là UPDATE thì ta thay thế
+              const otherReactions = post.reactions.filter(
+                (r) => r.id !== newRecord.id
+              );
+
+              // Thêm reaction mới vào
+              return {
+                ...post,
+                reactions: [...otherReactions, newRecord],
+              };
+            }
+          }
+
+          // TRƯỜNG HỢP 2: DELETE (Chỉ có oldRecord chứa ID)
+          if (eventType === "DELETE" && oldRecord) {
+            // Vì DELETE chỉ trả về ID, ta phải duyệt qua xem bài post này
+            // có chứa reaction ID bị xóa hay không.
+            const reactionExists = post.reactions.some(
+              (r) => r.id === oldRecord.id
+            );
+
+            if (reactionExists) {
+              return {
+                ...post,
+                reactions: post.reactions.filter((r) => r.id !== oldRecord.id),
+              };
+            }
+          }
+
           return post;
         })
       );
@@ -185,18 +227,18 @@ const NewsFeedPage = () => {
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "kudos" },
-        (payload) => {
-          // Nếu có bài mới insert -> Gọi hàm xử lý
-          handleNewPostRealtime(payload.new.id);
-        }
+        (payload) => handleNewPostRealtime(payload.new.id)
       )
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "comments" },
-        (payload) => {
-          // Nếu có comment mới insert -> Gọi hàm xử lý
-          handleNewCommentRealtime(payload.new.id);
-        }
+        (payload) => handleNewCommentRealtime(payload.new.id)
+      )
+      // --- LẮNG NGHE REACTION (Tất cả event: INSERT, UPDATE, DELETE) ---
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "reactions" },
+        (payload) => handleReactionRealtime(payload)
       )
       .subscribe();
 
@@ -223,14 +265,13 @@ const NewsFeedPage = () => {
     }, false);
   };
 
-  // Logic Infinite Scroll (Dùng ref để ổn định)
   const isLoadingMoreRef = useRef(isLoadingMore);
   useEffect(() => {
     isLoadingMoreRef.current = isLoadingMore;
   }, [isLoadingMore]);
 
   useEffect(() => {
-    if (isLoadingMore || isReachingEnd) return; // Chặn observer nếu đang load hoặc hết
+    if (isLoadingMore || isReachingEnd) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
@@ -245,9 +286,8 @@ const NewsFeedPage = () => {
     return () => {
       if (loadMoreRef.current) observer.unobserve(loadMoreRef.current);
     };
-  }, [isReachingEnd, setSize]); // Dependency tối giản
+  }, [isReachingEnd, setSize]);
 
-  // Reset scroll khi tìm kiếm
   useEffect(() => {
     if (debouncedSearch) window.scrollTo({ top: 0, behavior: "smooth" });
   }, [debouncedSearch]);
@@ -336,7 +376,6 @@ const NewsFeedPage = () => {
               </div>
             )}
 
-            {/* LOAD MORE */}
             {!isReachingEnd && (
               <div
                 ref={loadMoreRef}
