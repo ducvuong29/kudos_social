@@ -9,6 +9,8 @@ import {
   Edit2,
   Trash2,
   Send,
+  X,
+  Check,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -18,11 +20,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { createClient } from "@/lib/supabase/client";
 import { formatDistanceToNow } from "date-fns";
-import { vi } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import { useUser } from "@/context/UserContext";
 import { useApp } from "@/context/AppProvider";
+
 // --- CONSTANTS ---
 const REACTION_TYPES = [
   { id: "like", emoji: "👍", label: "Like", color: "text-blue-600" },
@@ -56,20 +58,27 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   const supabase = createClient();
   const { user: currentUser } = useUser();
   const { t } = useApp();
+
+  // Post States
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editMessage, setEditMessage] = useState(post.message);
 
+  // Comment Creation States
   const [showComments, setShowComments] = useState(false);
   const [commentInput, setCommentInput] = useState("");
-
   const [showMentionPopup, setShowMentionPopup] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionResults, setMentionResults] = useState([]);
   const [cursorPos, setCursorPos] = useState(0);
   const [pendingMentions, setPendingMentions] = useState([]);
 
-  // --- LOGIC ---
+  // --- MỚI: Comment Edit/Delete States ---
+  const [activeCommentMenuId, setActiveCommentMenuId] = useState(null); // ID của comment đang mở menu
+  const [editingCommentId, setEditingCommentId] = useState(null); // ID của comment đang sửa
+  const [editCommentContent, setEditCommentContent] = useState(""); // Nội dung đang sửa
+
+  // --- LOGIC POST ---
   const handleDeletePost = async () => {
     if (!confirm("Bạn có chắc chắn muốn xóa bài viết này không?")) return;
     const { error } = await supabase.from("kudos").delete().eq("id", post.id);
@@ -95,13 +104,12 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
     const existingReaction = post.reactions.find(
       (r) => r.user_id === currentUser.id
     );
-    // KIỂM TRA XEM REACTION CÓ THỂ LOẠI BỎ KHÔNG
     const isRemoving = existingReaction && existingReaction.type === type;
-    // LOẠI BỎ REACTION
+
     let newReactions = post.reactions.filter(
       (r) => r.user_id !== currentUser.id
     );
-    // NẾU KHÔNG LOẠI BỎ THÌ SẼ THÊM REACTION MỚI
+
     if (!isRemoving) {
       newReactions.push({ user_id: currentUser.id, type });
       triggerConfetti();
@@ -116,6 +124,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
       await supabase
         .from("reactions")
         .insert({ kudos_id: post.id, user_id: currentUser.id, type });
+
       if (post.sender?.id !== currentUser.id) {
         await supabase.from("notifications").insert({
           recipient_id: post.sender.id,
@@ -127,6 +136,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
     }
   };
 
+  // --- LOGIC COMMENT CREATION ---
   const handleCommentChange = async (e) => {
     const val = e.target.value;
     setCommentInput(val);
@@ -161,7 +171,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
     setCommentInput(newText);
     setShowMentionPopup(false);
     if (!pendingMentions.find((u) => u.id === user.id)) {
-      // DANH SÁCH NHỮNG NGƯỜI ĐANG ĐƯỢC MENTION CHỜ ĐƯỢC GỬI DB
       setPendingMentions([...pendingMentions, user]);
     }
   };
@@ -183,7 +192,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
       const updatedComments = [...(post.comments || []), newComment];
       onUpdate({ ...post, comments: updatedComments });
 
-      setCommentInput(""); // CHỈ THAY ĐỔI TRONG LẦN RENDER TỚI
+      setCommentInput("");
       setPendingMentions([]);
 
       if (post.sender?.id !== currentUser.id) {
@@ -210,6 +219,57 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
           processedIds.add(user.id);
         }
       }
+    }
+  };
+
+  // --- MỚI: LOGIC SỬA/XÓA COMMENT ---
+  const handleDeleteComment = async (commentId) => {
+    if (!confirm("Bạn có chắc muốn xóa bình luận này?")) return;
+
+    // 1. Cập nhật UI ngay lập tức (Optimistic update)
+    const updatedComments = post.comments.filter((c) => c.id !== commentId);
+
+    // GỌI HÀM CỦA CHA ĐỂ UPDATE SWR CACHE
+    onUpdate({ ...post, comments: updatedComments });
+    setActiveCommentMenuId(null);
+
+    // 2. Gọi API xóa
+    const { error } = await supabase
+      .from("comments")
+      .delete()
+      .eq("id", commentId);
+
+    if (error) {
+      alert("Lỗi xóa comment: " + error.message);
+      // Nếu lỗi thì có thể reload lại trang hoặc revert state
+    }
+  };
+
+  const startEditingComment = (comment) => {
+    setEditingCommentId(comment.id);
+    setEditCommentContent(comment.content);
+    setActiveCommentMenuId(null);
+  };
+
+  const handleUpdateComment = async (commentId) => {
+    if (!editCommentContent.trim()) return;
+
+    // 1. Gọi API update
+    const { error } = await supabase
+      .from("comments")
+      .update({ content: editCommentContent })
+      .eq("id", commentId);
+
+    if (!error) {
+      // 2. Cập nhật UI
+      const updatedComments = post.comments.map((c) =>
+        c.id === commentId ? { ...c, content: editCommentContent } : c
+      );
+      // GỌI HÀM CỦA CHA ĐỂ UPDATE SWR CACHE
+      onUpdate({ ...post, comments: updatedComments });
+      setEditingCommentId(null);
+    } else {
+      alert("Lỗi cập nhật: " + error.message);
     }
   };
 
@@ -245,7 +305,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   };
 
   return (
-    // CARD: rounded-2xl trên mobile, rounded-3xl trên desktop
     <Card
       id={`post-${post.id}`}
       className="border-none shadow-sm hover:shadow-lg transition-shadow duration-300 bg-white dark:bg-slate-800 rounded-2xl md:rounded-3xl overflow-visible transition-colors"
@@ -278,7 +337,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                   })}
                 </p>
               </div>
-              {/* Menu & Tags - Giữ nguyên, chỉ cần flex wrap nếu cần */}
+              {/* Menu & Tags */}
               <div className="flex items-center gap-2 shrink-0">
                 {post.tags?.[0] && (
                   <Badge
@@ -298,7 +357,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                     >
                       <MoreHorizontal size={20} />
                     </button>
-                    {/* ... (Dropdown Menu giữ nguyên) */}
                     {isMenuOpen && (
                       <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
                         <button
@@ -355,7 +413,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
               </p>
             )}
 
-            {/* Images */}
+            {/* Images - ĐÃ SỬA: Thêm e.stopPropagation() */}
             {post.image_urls?.length > 0 && (
               <div
                 className={`grid gap-2 md:gap-3 mb-4 md:mb-5 rounded-2xl overflow-hidden ${
@@ -365,21 +423,25 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                 {post.image_urls.map((img, i) => (
                   <div
                     key={i}
-                    className="relative aspect-video bg-gray-100 dark:bg-slate-900 cursor-zoom-in"
-                    onClick={() => {
-                      onImageClick && onImageClick(img);
+                    className="relative aspect-video bg-gray-100 dark:bg-slate-900 cursor-zoom-in group"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      if (onImageClick) onImageClick(img);
                     }}
                   >
                     <img
                       src={img}
+                      alt="post-image"
                       className="absolute inset-0 w-full h-full object-cover hover:scale-105 transition-transform duration-500 cursor-pointer"
                     />
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors pointer-events-none" />
                   </div>
                 ))}
               </div>
             )}
 
-            {/* Tags - flex wrap */}
+            {/* Tags */}
             {post.tags?.length > 0 && (
               <div className="flex flex-wrap gap-2 mb-4 md:mb-5">
                 {post.tags.map((t) => (
@@ -395,7 +457,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
 
             {/* Reactions Stats */}
             <div className="flex items-center justify-between py-3 border-t border-gray-50 dark:border-gray-700">
-              {/* ... (Giữ nguyên logic hiển thị icon reactions) */}
               <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
                 {Object.keys(reactionsCount).length > 0 && (
                   <div className="flex -space-x-2 mr-1">
@@ -421,7 +482,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
               </div>
             </div>
 
-            {/* Buttons - THAY ĐỔI QUAN TRỌNG: Responsive padding và text */}
+            {/* Action Buttons */}
             <div className="flex items-center justify-between md:justify-start gap-1 md:gap-4 pt-3 border-t border-gray-50 dark:border-gray-700 relative">
               <div className="relative group pb-2 flex-1 md:flex-none">
                 <button
@@ -445,7 +506,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                       : t.like}
                   </span>
                 </button>
-                {/* Popup reactions giữ nguyên */}
                 <div className="absolute bottom-12 left-0 hidden group-hover:flex bg-white dark:bg-slate-800 p-2 rounded-full shadow-xl gap-2 z-50 border border-gray-100 dark:border-gray-700 animate-in slide-in-from-bottom-2 fade-in">
                   {REACTION_TYPES.map((r) => (
                     <button
@@ -475,14 +535,13 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
 
               <button className="flex-1 md:flex-none flex items-center justify-center gap-1.5 md:gap-2 px-2 md:px-6 py-2 md:py-2.5 rounded-full text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors cursor-pointer md:ml-auto">
                 <Share2 size={18} className="md:w-5 md:h-5" />
-                {/* Trên mobile hiện chữ share cho cân đối */}
                 <span className="font-bold text-xs md:text-sm md:hidden">
                   Share
                 </span>
               </button>
             </div>
 
-            {/* Comments Area - Giữ nguyên logic */}
+            {/* Comments Area - ĐÃ CẬP NHẬT */}
             <AnimatePresence>
               {showComments && (
                 <motion.div
@@ -491,26 +550,102 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                   exit={{ opacity: 0, height: 0 }}
                   className="mt-4 md:mt-5 bg-gray-50 dark:bg-slate-900/50 rounded-2xl p-3 md:p-5"
                 >
-                  {/* ... (Logic hiển thị list comment giữ nguyên) */}
                   {post.comments?.length > 0 && (
                     <div className="space-y-5 mb-5 max-h-96 overflow-y-auto pr-2 custom-scrollbar ">
                       {post.comments.map((comment) => (
                         <div
                           key={comment.id}
-                          className="flex gap-3 group/comment"
+                          className="flex gap-3 group/comment relative"
                         >
                           <Avatar className="w-8 h-8 md:w-9 md:h-9 mt-1">
                             <AvatarImage src={comment.user?.avatar_url} />
                             <AvatarFallback>U</AvatarFallback>
                           </Avatar>
-                          <div className="flex-1">
+                          <div className="flex-1 min-w-0">
                             <div className="bg-white dark:bg-slate-800 p-3 md:p-4 rounded-2xl rounded-tl-none shadow-sm border border-gray-100 dark:border-slate-700 relative">
-                              <p className="text-xs md:text-sm font-bold text-gray-900 dark:text-white mb-1">
-                                {comment.user?.full_name}
-                              </p>
-                              <p className="text-xs md:text-sm text-gray-800 dark:text-gray-300">
-                                {comment.content}
-                              </p>
+                              <div className="flex justify-between items-start">
+                                <p className="text-xs md:text-sm font-bold text-gray-900 dark:text-white mb-1">
+                                  {comment.user?.full_name}
+                                </p>
+
+                                {/* MỚI: Menu Edit/Delete cho Comment */}
+                                {currentUser?.id === comment.user?.id &&
+                                  !editingCommentId && (
+                                    <div className="relative">
+                                      <button
+                                        onClick={() =>
+                                          setActiveCommentMenuId(
+                                            activeCommentMenuId === comment.id
+                                              ? null
+                                              : comment.id
+                                          )
+                                        }
+                                        className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-full opacity-0 group-hover/comment:opacity-100 transition-opacity"
+                                      >
+                                        <MoreHorizontal size={14} />
+                                      </button>
+
+                                      {activeCommentMenuId === comment.id && (
+                                        <div className="absolute right-0 top-full mt-1 w-28 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
+                                          <button
+                                            onClick={() =>
+                                              startEditingComment(comment)
+                                            }
+                                            className="w-full text-left px-3 py-2 text-xs flex gap-2 hover:bg-blue-50 dark:hover:bg-slate-800 text-blue-600 transition-colors cursor-pointer"
+                                          >
+                                            <Edit2 size={12} /> {t.edit}
+                                          </button>
+                                          <button
+                                            onClick={() =>
+                                              handleDeleteComment(comment.id)
+                                            }
+                                            className="w-full text-left px-3 py-2 text-xs flex gap-2 hover:bg-red-50 dark:hover:bg-slate-800 text-red-600 transition-colors cursor-pointer"
+                                          >
+                                            <Trash2 size={12} /> {t.delete}
+                                          </button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                              </div>
+
+                              {/* MỚI: Hiển thị nội dung hoặc ô Input khi sửa */}
+                              {editingCommentId === comment.id ? (
+                                <div className="mt-1">
+                                  <Input
+                                    value={editCommentContent}
+                                    onChange={(e) =>
+                                      setEditCommentContent(e.target.value)
+                                    }
+                                    className="h-8 text-xs md:text-sm mb-2"
+                                    autoFocus
+                                    onKeyDown={(e) =>
+                                      e.key === "Enter" &&
+                                      handleUpdateComment(comment.id)
+                                    }
+                                  />
+                                  <div className="flex gap-2 justify-end">
+                                    <button
+                                      onClick={() => setEditingCommentId(null)}
+                                      className="text-xs text-gray-500 hover:underline cursor-pointer"
+                                    >
+                                      {t.cancel}
+                                    </button>
+                                    <button
+                                      onClick={() =>
+                                        handleUpdateComment(comment.id)
+                                      }
+                                      className="text-xs text-blue-600 font-bold hover:underline cursor-pointer"
+                                    >
+                                      {t.save}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <p className="text-xs md:text-sm text-gray-800 dark:text-gray-300 break-words whitespace-pre-wrap">
+                                  {comment.content}
+                                </p>
+                              )}
                             </div>
                             <span className="text-[10px] md:text-xs text-gray-400 dark:text-gray-500 mt-1.5 ml-2 font-medium">
                               {formatDistanceToNow(
@@ -524,6 +659,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                     </div>
                   )}
 
+                  {/* Input Comment */}
                   <div className="flex gap-2 md:gap-3 relative items-start">
                     <Avatar className="w-8 h-8 md:w-9 md:h-9">
                       <AvatarImage src={currentUser?.avatar_url} />
@@ -537,7 +673,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                         placeholder={t.writeComment}
                         className="bg-white dark:bg-slate-800 rounded-full pr-10 md:pr-12 py-4 md:py-5 shadow-sm border-gray-200 dark:border-slate-700 focus:ring-1 focus:ring-blue-500 dark:text-white dark:placeholder:text-gray-500 text-sm md:text-base"
                       />
-                      {/* ... (Logic mention popup giữ nguyên) */}
                       {showMentionPopup && mentionResults.length > 0 && (
                         <div className="absolute bottom-full left-0 w-64 mb-2 bg-white dark:bg-slate-800 border rounded-xl shadow-xl z-50 overflow-hidden dark:border-slate-700">
                           {mentionResults.map((u) => (

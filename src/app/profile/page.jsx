@@ -18,7 +18,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import useSWR, { mutate } from "swr";
+import useSWR from "swr";
 import PostItem from "@/components/feed/PostItem";
 import NotificationList from "@/components/common/NotificationList";
 import { useUser } from "@/context/UserContext";
@@ -32,6 +32,7 @@ const ProfilePage = () => {
   const [activeTab, setActiveTab] = useState("received");
   const [searchQuery, setSearchQuery] = useState("");
   const [viewingImage, setViewingImage] = useState(null);
+
   // Edit Profile & Password State
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -183,7 +184,11 @@ const ProfilePage = () => {
         ...p,
         receiverList: p.recipients ? p.recipients.map((r) => r.user) : [],
         image_urls: p.image_urls || (p.image_url ? [p.image_url] : []),
-        comments: p.comments || [],
+        comments: p.comments
+          ? p.comments.sort(
+              (a, b) => new Date(a.created_at) - new Date(b.created_at)
+            )
+          : [],
         reactions: p.reactions || [],
       }));
     },
@@ -206,18 +211,23 @@ const ProfilePage = () => {
       return matchMessage || matchSender || matchReceiver;
     }) || [];
 
+  // --- HÀM UPDATE CACHE SWR (Dùng cho Sửa post & Comment & Reaction) ---
   const handleUpdatePostList = async (updatedPost) => {
+    // false ở tham số thứ 2 nghĩa là chỉ update cache client, không fetch lại từ server
     await mutatePosts(
       posts.map((p) => (p.id === updatedPost.id ? updatedPost : p)),
       false
     );
   };
+
+  // --- HÀM DELETE CACHE SWR ---
   const handleDeletePostList = async (postId) => {
     await mutatePosts(
       posts.filter((p) => p.id !== postId),
       false
     );
   };
+
   const toggleShow = (field) =>
     setShowPassword((prev) => ({ ...prev, [field]: !prev[field] }));
   const handleAvatarChange = (e) => {
@@ -301,7 +311,6 @@ const ProfilePage = () => {
     }
   };
 
-  // Hàm helper để gỡ readonly khi người dùng click vào
   const handleFocusReadOnly = (e) => {
     e.target.removeAttribute("readonly");
   };
@@ -321,7 +330,7 @@ const ProfilePage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50/50 dark:bg-slate-900/50 pb-24 md:pb-10 transition-colors">
-      {/* --- MODAL XEM ẢNH FULL SCREEN (MỚI THÊM) --- */}
+      {/* --- MODAL XEM ẢNH --- */}
       {viewingImage && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200 cursor-zoom-out"
@@ -344,7 +353,7 @@ const ProfilePage = () => {
         </div>
       )}
 
-      {/* POPUP EDIT PROFILE (Giữ nguyên) */}
+      {/* POPUP EDIT PROFILE */}
       {isEditing && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
@@ -434,7 +443,7 @@ const ProfilePage = () => {
         </div>
       )}
 
-      {/* HEADER: Gọn gàng trên mobile */}
+      {/* HEADER */}
       <header className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-gray-200 dark:border-gray-800 sticky top-0 z-40 transition-colors">
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex h-16 items-center justify-between">
@@ -443,7 +452,6 @@ const ProfilePage = () => {
                 {t.myProfile}
               </h2>
             </div>
-            {/* Search Bar & Noti: Chỉ hiện trên Desktop */}
             <div className="flex items-center gap-4 ml-auto hidden md:flex">
               <div className="relative group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
@@ -471,7 +479,7 @@ const ProfilePage = () => {
 
       <main className="px-4 sm:px-6 lg:px-8 py-4 md:py-8 max-w-7xl mx-auto">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 md:gap-8">
-          {/* LEFT COLUMN: 12 cột trên mobile, 4 cột trên desktop */}
+          {/* LEFT COLUMN */}
           <div className="lg:col-span-4 space-y-6">
             {/* Profile Info Card */}
             <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden z-10 transition-colors">
@@ -702,7 +710,6 @@ const ProfilePage = () => {
                         post={item}
                         onDelete={handleDeletePostList}
                         onUpdate={handleUpdatePostList}
-                        // --- ĐÃ SỬA DÒNG NÀY ---
                         onImageClick={(img) => setViewingImage(img)}
                       />
                     ))}

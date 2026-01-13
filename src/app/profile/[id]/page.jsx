@@ -7,6 +7,7 @@ import PostItem from "@/components/feed/PostItem";
 import { useParams } from "next/navigation";
 import { useUser } from "@/context/UserContext";
 import { useApp } from "@/context/AppProvider";
+
 const UserProfilePage = () => {
   const { id } = useParams();
   const supabase = createClient();
@@ -160,6 +161,18 @@ const UserProfilePage = () => {
     fetchPosts();
   }, [id, activeTab]);
 
+  // --- HÀM UPDATE STATE (Dùng cho Sửa post & Comment & Reaction) ---
+  const handleUpdatePostList = (updatedPost) => {
+    setPosts((currentPosts) =>
+      currentPosts.map((p) => (p.id === updatedPost.id ? updatedPost : p))
+    );
+  };
+
+  // --- HÀM DELETE STATE ---
+  const handleDeletePostList = (postId) => {
+    setPosts((currentPosts) => currentPosts.filter((p) => p.id !== postId));
+  };
+
   if (loading)
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -297,9 +310,9 @@ const UserProfilePage = () => {
                     <PostItem
                       key={post.id}
                       post={post}
-                      onUpdate={() => {}}
-                      onDelete={() => {}}
-                      // --- SỬA DÒNG NÀY ---
+                      // --- ĐÃ THÊM HÀM CẬP NHẬT STATE ---
+                      onDelete={handleDeletePostList}
+                      onUpdate={handleUpdatePostList}
                       onImageClick={(img) => setViewingImage(img)}
                     />
                   ))}
