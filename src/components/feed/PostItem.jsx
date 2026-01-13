@@ -144,6 +144,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
         .from("profiles")
         .select("*")
         .ilike("full_name", `%${currentWord.substring(1)}%`)
+        .neq("id", currentUser.id)
         .limit(5);
       if (data) setMentionResults(data);
     } else {
@@ -365,7 +366,9 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                   <div
                     key={i}
                     className="relative aspect-video bg-gray-100 dark:bg-slate-900 cursor-zoom-in"
-                    onClick={() => onImageClick && onImageClick(img)}
+                    onClick={() => {
+                      onImageClick && onImageClick(img);
+                    }}
                   >
                     <img
                       src={img}
@@ -544,7 +547,15 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                               onClick={() => insertMention(u)}
                             >
                               <Avatar className="w-8 h-8">
-                                <AvatarImage src={u.avatar_url} />
+                                <AvatarImage
+                                  src={
+                                    u.avatar_url ||
+                                    "https://github.com/shadcn.png"
+                                  }
+                                />
+                                <AvatarFallback>
+                                  {u.full_name?.charAt(0).toUpperCase() || "U"}
+                                </AvatarFallback>
                               </Avatar>
                               <span className="text-sm font-medium dark:text-gray-200">
                                 {u.full_name}

@@ -144,6 +144,7 @@ const CreateKudos = ({ onSuccess }) => {
         .from("profiles")
         .select("*")
         .ilike("full_name", `%${val}%`)
+        .neq("id", currentUser.id)
         .limit(5);
       if (data) setSearchResults(data);
     } else setSearchResults([]);

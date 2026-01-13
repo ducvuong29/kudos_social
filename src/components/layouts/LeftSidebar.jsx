@@ -172,7 +172,9 @@ const LeftSidebar = () => {
           <div className="p-4 bg-gray-50/80 dark:bg-slate-800/80 rounded-2xl border border-gray-100/80 dark:border-gray-700 hover:border-blue-100 dark:hover:border-blue-900 transition-colors group">
             <div className="flex items-center gap-3 mb-3">
               <Avatar className="w-10 h-10 ring-2 ring-blue-500 ring-offset-2 dark:ring-offset-slate-900">
-                <AvatarImage src={user?.avatar_url} />
+                <AvatarImage
+                  src={user?.avatar_url || "https://github.com/shadcn.png"}
+                />
                 <AvatarFallback>
                   {user?.full_name?.charAt(0) || "U"}
                 </AvatarFallback>

@@ -31,7 +31,7 @@ const ProfilePage = () => {
 
   const [activeTab, setActiveTab] = useState("received");
   const [searchQuery, setSearchQuery] = useState("");
-
+  const [viewingImage, setViewingImage] = useState(null);
   // Edit Profile & Password State
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -132,7 +132,11 @@ const ProfilePage = () => {
   } = useSWR(
     user ? ["profile-posts", user.id, activeTab] : null,
     async () => {
-      const selectQuery = `*, sender:sender_id(full_name, avatar_url, id), recipients:kudos_receivers(user:user_id(full_name, avatar_url, id)), comments(id, content, created_at, user:user_id(full_name, avatar_url, id)), reactions(type, user_id)`;
+      const selectQuery = `*,
+        sender:sender_id(full_name, avatar_url, id),
+        recipients:kudos_receivers(user:user_id(full_name, avatar_url, id)),
+        comments(id, content, created_at, user:user_id(full_name, avatar_url, id)), 
+        reactions(type, user_id)`;
       let dataToSet = [];
       const fetchGiven = async () => {
         const { data } = await supabase
@@ -317,7 +321,30 @@ const ProfilePage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50/50 dark:bg-slate-900/50 pb-24 md:pb-10 transition-colors">
-      {/* POPUP EDIT PROFILE (Giữ nguyên, chỉ thêm z-index cao) */}
+      {/* --- MODAL XEM ẢNH FULL SCREEN (MỚI THÊM) --- */}
+      {viewingImage && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200 cursor-zoom-out"
+          onClick={() => setViewingImage(null)}
+        >
+          <div className="relative max-w-screen-xl max-h-screen w-full h-full flex items-center justify-center">
+            <button
+              onClick={() => setViewingImage(null)}
+              className="absolute top-2 right-2 md:top-4 md:right-4 text-white/70 hover:text-white p-2 bg-black/50 hover:bg-black/70 rounded-full transition-all z-50 cursor-pointer"
+            >
+              <X size={32} />
+            </button>
+            <img
+              src={viewingImage}
+              alt="Full screen"
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* POPUP EDIT PROFILE (Giữ nguyên) */}
       {isEditing && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden max-h-[90vh] flex flex-col">
@@ -330,7 +357,6 @@ const ProfilePage = () => {
               </button>
             </div>
             <div className="p-6 grid gap-6 overflow-y-auto">
-              {/* ... (Nội dung form giữ nguyên) ... */}
               <div className="flex flex-col items-center justify-center gap-4">
                 <div className="relative group">
                   <img
@@ -417,7 +443,7 @@ const ProfilePage = () => {
                 {t.myProfile}
               </h2>
             </div>
-            {/* Search Bar & Noti: Chỉ hiện trên Desktop (vì mobile đã có ở chỗ khác) */}
+            {/* Search Bar & Noti: Chỉ hiện trên Desktop */}
             <div className="flex items-center gap-4 ml-auto hidden md:flex">
               <div className="relative group">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
@@ -580,7 +606,7 @@ const ProfilePage = () => {
 
           {/* RIGHT COLUMN */}
           <div className="lg:col-span-8 space-y-6">
-            {/* Stats Grid: Mobile 3 cột nhưng nhỏ */}
+            {/* Stats Grid */}
             <div className="grid grid-cols-3 gap-2 md:gap-4">
               <div className="bg-white dark:bg-slate-800 rounded-2xl p-3 md:p-5 shadow-sm border border-gray-200 dark:border-gray-700 text-center md:text-left transition-all">
                 <div className="flex flex-col md:flex-row md:justify-between md:items-start mb-1 md:mb-4 items-center">
@@ -676,7 +702,8 @@ const ProfilePage = () => {
                         post={item}
                         onDelete={handleDeletePostList}
                         onUpdate={handleUpdatePostList}
-                        onImageClick={(img) => window.open(img, "_blank")}
+                        // --- ĐÃ SỬA DÒNG NÀY ---
+                        onImageClick={(img) => setViewingImage(img)}
                       />
                     ))}
                   </div>

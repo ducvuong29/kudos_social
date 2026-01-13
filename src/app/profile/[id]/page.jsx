@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { Briefcase, MapPin, Loader2 } from "lucide-react";
+import { Briefcase, MapPin, Loader2, X } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import PostItem from "@/components/feed/PostItem";
 import { useParams } from "next/navigation";
@@ -18,6 +18,7 @@ const UserProfilePage = () => {
   const [posts, setPosts] = useState([]);
   const [loadingPosts, setLoadingPosts] = useState(false);
   const [activeTab, setActiveTab] = useState("received"); // 'received' | 'given' | 'all'
+  const [viewingImage, setViewingImage] = useState(null);
 
   // 1. Fetch Profile
   useEffect(() => {
@@ -169,6 +170,29 @@ const UserProfilePage = () => {
 
   return (
     <div className="min-h-screen bg-gray-50/50 dark:bg-slate-900/50 pb-24 md:pb-10 p-4 md:p-8 max-w-7xl mx-auto transition-colors">
+      {/* --- MODAL XEM ẢNH FULL SCREEN (MỚI THÊM) --- */}
+      {viewingImage && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-200 cursor-zoom-out"
+          onClick={() => setViewingImage(null)}
+        >
+          <div className="relative max-w-screen-xl max-h-screen w-full h-full flex items-center justify-center">
+            <button
+              onClick={() => setViewingImage(null)}
+              className="absolute top-2 right-2 md:top-4 md:right-4 text-white/70 hover:text-white p-2 bg-black/50 hover:bg-black/70 rounded-full transition-all z-50 cursor-pointer"
+            >
+              <X size={32} />
+            </button>
+            <img
+              src={viewingImage}
+              alt="Full screen"
+              className="max-w-full max-h-full object-contain rounded-lg shadow-2xl cursor-default animate-in zoom-in-95 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Profile Header Card */}
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden mb-6 transition-colors">
         <div className="h-24 md:h-32 bg-gradient-to-r from-blue-400 to-indigo-500"></div>
@@ -275,6 +299,8 @@ const UserProfilePage = () => {
                       post={post}
                       onUpdate={() => {}}
                       onDelete={() => {}}
+                      // --- SỬA DÒNG NÀY ---
+                      onImageClick={(img) => setViewingImage(img)}
                     />
                   ))}
                 </div>
