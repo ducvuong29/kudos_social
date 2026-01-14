@@ -74,7 +74,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   const [cursorPos, setCursorPos] = useState(0);
   const [pendingMentions, setPendingMentions] = useState([]);
 
-  // --- MỚI: Comment Edit/Delete States ---
+  // --- Comment Edit/Delete States ---
   const [activeCommentMenuId, setActiveCommentMenuId] = useState(null);
   const [editingCommentId, setEditingCommentId] = useState(null);
   const [editCommentContent, setEditCommentContent] = useState("");
@@ -109,7 +109,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   const handleReaction = async (type) => {
     if (!currentUser) return;
 
-    // Logic cũ của bạn rất tốt: lọc bỏ user hiện tại rồi thêm mới
     const existingReaction = post.reactions.find(
       (r) => r.user_id === currentUser.id
     );
@@ -277,21 +276,30 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
     }
   };
 
-  // --- SỬA LẠI PHẦN ĐẾM REACTIONS ---
-  // Sử dụng useMemo để lọc ra danh sách reaction duy nhất theo user_id
+  // --- 🔥 SỬA LOGIC ĐẾM REACTIONS (QUAN TRỌNG) ---
   const uniqueReactions = useMemo(() => {
-    if (!post.reactions) return [];
+    // 1. Kiểm tra mảng tồn tại
+    if (!post.reactions || !Array.isArray(post.reactions)) return [];
 
-    // Lọc trùng lặp: Nếu mảng chứa nhiều reaction của cùng 1 user_id, chỉ giữ lại 1
-    return post.reactions.filter(
-      (reaction, index, self) =>
-        index === self.findIndex((r) => r.user_id === reaction.user_id)
-    );
+    return post.reactions.filter((reaction, index, self) => {
+      // 2. CHỐT CHẶN: Loại bỏ null/undefined hoặc object rỗng
+      if (!reaction || typeof reaction !== "object") return false;
+
+      // 3. ĐIỀU KIỆN TIÊN QUYẾT: Phải có cả user_id VÀ type
+      // Nếu thiếu 'type', đây có thể là object comment bị lẫn vào hoặc dữ liệu rác
+      if (!reaction.user_id || !reaction.type) return false;
+
+      // 4. Lọc trùng lặp user_id
+      const firstIndex = self.findIndex((r) => r.user_id === reaction.user_id);
+      return index === firstIndex;
+    });
   }, [post.reactions]);
 
-  // Tính toán dựa trên danh sách đã lọc trùng (uniqueReactions)
   const reactionsCount = uniqueReactions.reduce((acc, curr) => {
-    acc[curr.type] = (acc[curr.type] || 0) + 1;
+    // Kiểm tra an toàn thêm 1 lần nữa (dù filter đã lo rồi)
+    if (curr.type) {
+      acc[curr.type] = (acc[curr.type] || 0) + 1;
+    }
     return acc;
   }, {});
 
@@ -526,7 +534,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                     ))}
                   </div>
                 )}
-                {/* SỬA: Dùng uniqueReactions.length thay vì post.reactions.length */}
                 <span>
                   {uniqueReactions.length} {t.reactions}
                 </span>
