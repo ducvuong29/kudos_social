@@ -460,4 +460,4 @@ const CreateKudos = ({ onSuccess }) => {
   );
 };
 
-export default CreateKudos;
+export default React.memo(CreateKudos);

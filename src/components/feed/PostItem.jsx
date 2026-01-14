@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, memo, useMemo } from "react";
 import {
   ThumbsUp,
   MessageSquare,
@@ -75,28 +75,25 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   const [pendingMentions, setPendingMentions] = useState([]);
 
   // --- MỚI: Comment Edit/Delete States ---
-  const [activeCommentMenuId, setActiveCommentMenuId] = useState(null); // ID của comment đang mở menu
-  const [editingCommentId, setEditingCommentId] = useState(null); // ID của comment đang sửa
-  const [editCommentContent, setEditCommentContent] = useState(""); // Nội dung đang sửa
+  const [activeCommentMenuId, setActiveCommentMenuId] = useState(null);
+  const [editingCommentId, setEditingCommentId] = useState(null);
+  const [editCommentContent, setEditCommentContent] = useState("");
   const [isDeleteConfirm, setIsDeleteConfirm] = useState(false);
   const [confirmDeleteCommentId, setConfirmDeleteCommentId] = useState(null);
+
   // --- LOGIC POST ---
   const handleDeletePost = async () => {
-    // Không cần window.confirm hay e.preventDefault ở đây nữa
-
-    // 1. Đóng menu ngay để UI gọn gàng
     setIsMenuOpen(false);
-
-    // 2. Gọi API xóa
     const { error } = await supabase.from("kudos").delete().eq("id", post.id);
 
     if (error) {
       alert("Lỗi xóa: " + error.message);
-      setIsDeleteConfirm(false); // Reset lại nếu lỗi
+      setIsDeleteConfirm(false);
     } else {
-      onDelete(post.id); // Cập nhật UI thành công
+      onDelete(post.id);
     }
   };
+
   const handleUpdatePost = async () => {
     if (!editMessage.trim()) return alert("Nội dung trống!");
     const { error } = await supabase
@@ -112,6 +109,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   const handleReaction = async (type) => {
     if (!currentUser) return;
 
+    // Logic cũ của bạn rất tốt: lọc bỏ user hiện tại rồi thêm mới
     const existingReaction = post.reactions.find(
       (r) => r.user_id === currentUser.id
     );
@@ -233,30 +231,24 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
     }
   };
 
-  // --- MỚI: LOGIC SỬA/XÓA COMMENT ---
+  // --- LOGIC SỬA/XÓA COMMENT ---
   const handleDeleteComment = async (commentId) => {
-    // 1. Backup dữ liệu cũ để revert nếu lỗi
     const previousComments = [...post.comments];
-
-    // 2. Optimistic Update (Ẩn comment ngay lập tức cho mượt)
     const updatedComments = post.comments.filter((c) => c.id !== commentId);
     onUpdate({ ...post, comments: updatedComments });
 
-    // 3. Reset các state menu
     setActiveCommentMenuId(null);
     setConfirmDeleteCommentId(null);
 
-    // 4. Gọi API xóa thật
     const { error } = await supabase
       .from("comments")
       .delete()
       .eq("id", commentId);
 
-    // 5. Nếu lỗi thì khôi phục lại
     if (error) {
       console.error("Lỗi xóa comment:", error);
       alert("Không xóa được comment: " + error.message);
-      onUpdate({ ...post, comments: previousComments }); // Hoàn tác
+      onUpdate({ ...post, comments: previousComments });
     }
   };
 
@@ -269,18 +261,15 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   const handleUpdateComment = async (commentId) => {
     if (!editCommentContent.trim()) return;
 
-    // 1. Gọi API update
     const { error } = await supabase
       .from("comments")
       .update({ content: editCommentContent })
       .eq("id", commentId);
 
     if (!error) {
-      // 2. Cập nhật UI
       const updatedComments = post.comments.map((c) =>
         c.id === commentId ? { ...c, content: editCommentContent } : c
       );
-      // GỌI HÀM CỦA CHA ĐỂ UPDATE SWR CACHE
       onUpdate({ ...post, comments: updatedComments });
       setEditingCommentId(null);
     } else {
@@ -288,15 +277,28 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
     }
   };
 
-  const reactionsCount = post.reactions
-    ? post.reactions.reduce((acc, curr) => {
-        acc[curr.type] = (acc[curr.type] || 0) + 1;
-        return acc;
-      }, {})
-    : {};
-  const myReaction = post.reactions?.find(
+  // --- SỬA LẠI PHẦN ĐẾM REACTIONS ---
+  // Sử dụng useMemo để lọc ra danh sách reaction duy nhất theo user_id
+  const uniqueReactions = useMemo(() => {
+    if (!post.reactions) return [];
+
+    // Lọc trùng lặp: Nếu mảng chứa nhiều reaction của cùng 1 user_id, chỉ giữ lại 1
+    return post.reactions.filter(
+      (reaction, index, self) =>
+        index === self.findIndex((r) => r.user_id === reaction.user_id)
+    );
+  }, [post.reactions]);
+
+  // Tính toán dựa trên danh sách đã lọc trùng (uniqueReactions)
+  const reactionsCount = uniqueReactions.reduce((acc, curr) => {
+    acc[curr.type] = (acc[curr.type] || 0) + 1;
+    return acc;
+  }, {});
+
+  const myReaction = uniqueReactions.find(
     (r) => r.user_id === currentUser?.id
   )?.type;
+  // ----------------------------------------------
 
   const renderRecipients = (recipients) => {
     if (!recipients || recipients.length === 0)
@@ -374,11 +376,10 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                     </button>
                     {isMenuOpen && (
                       <div className="absolute right-0 top-full mt-1 w-40 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
-                        {/* Nút Edit (Giữ nguyên) */}
                         {!isDeleteConfirm && (
                           <button
                             onClick={(e) => {
-                              e.stopPropagation(); // Chặn click lan ra ngoài
+                              e.stopPropagation();
                               setIsEditing(true);
                               setIsMenuOpen(false);
                             }}
@@ -388,41 +389,35 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                           </button>
                         )}
 
-                        {/* LOGIC NÚT XÓA MỚI */}
                         {!isDeleteConfirm ? (
-                          // TRẠNG THÁI 1: Hiện nút Xóa bình thường
                           <button
                             onClick={(e) => {
-                              e.stopPropagation(); // Chặn click lan ra ngoài
-                              setIsDeleteConfirm(true); // Chuyển sang chế độ xác nhận
+                              e.stopPropagation();
+                              setIsDeleteConfirm(true);
                             }}
                             className="w-full text-left px-4 py-3 text-sm flex gap-2 hover:bg-red-50 dark:hover:bg-slate-800 text-red-600 transition-colors cursor-pointer"
                           >
                             <Trash2 size={14} /> {t.delete}
                           </button>
                         ) : (
-                          // TRẠNG THÁI 2: Hiện xác nhận "Chắc chắn xóa?"
                           <div className="bg-red-50 dark:bg-red-900/10 p-2">
                             <p className="text-xs text-red-600 px-2 mb-2 font-medium">
                               Bạn chắc chứ?
                             </p>
                             <div className="flex gap-2 px-2 pb-1">
-                              {/* Nút HỦY */}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  setIsDeleteConfirm(false); // Quay lại
+                                  setIsDeleteConfirm(false);
                                 }}
                                 className="flex-1 py-1.5 text-xs bg-white dark:bg-slate-800 border border-gray-200 dark:border-gray-600 rounded text-gray-600 dark:text-gray-300 hover:bg-gray-100"
                               >
                                 Hủy
                               </button>
-
-                              {/* Nút XÓA THẬT */}
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleDeletePost(); // Gọi hàm xóa
+                                  handleDeletePost();
                                 }}
                                 className="flex-1 py-1.5 text-xs bg-red-600 text-white rounded hover:bg-red-700 font-bold"
                               >
@@ -470,7 +465,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
               </p>
             )}
 
-            {/* Images - ĐÃ SỬA: Thêm e.stopPropagation() */}
+            {/* Images */}
             {post.image_urls?.length > 0 && (
               <div
                 className={`grid gap-2 md:gap-3 mb-4 md:mb-5 rounded-2xl overflow-hidden ${
@@ -531,8 +526,9 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                     ))}
                   </div>
                 )}
+                {/* SỬA: Dùng uniqueReactions.length thay vì post.reactions.length */}
                 <span>
-                  {post.reactions?.length || 0} {t.reactions}
+                  {uniqueReactions.length} {t.reactions}
                 </span>
               </div>
               <div
@@ -602,7 +598,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
               </button>
             </div>
 
-            {/* Comments Area - ĐÃ CẬP NHẬT */}
+            {/* Comments Area */}
             <AnimatePresence>
               {showComments && (
                 <motion.div
@@ -629,7 +625,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                                   {comment.user?.full_name}
                                 </p>
 
-                                {/* MỚI: Menu Edit/Delete cho Comment */}
                                 {currentUser?.id === comment.user?.id &&
                                   !editingCommentId && (
                                     <div className="relative">
@@ -648,7 +643,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
 
                                       {activeCommentMenuId === comment.id && (
                                         <div className="absolute right-0 top-full mt-1 w-32 bg-white dark:bg-slate-900 rounded-lg shadow-xl border border-gray-100 dark:border-gray-700 z-50 overflow-hidden">
-                                          {/* LOGIC: Nếu ĐANG xác nhận xóa comment này -> Hiện nút Có/Không */}
                                           {confirmDeleteCommentId ===
                                           comment.id ? (
                                             <div className="bg-red-50 dark:bg-red-900/20 p-1.5">
@@ -661,7 +655,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                                                     e.stopPropagation();
                                                     setConfirmDeleteCommentId(
                                                       null
-                                                    ); // Hủy, quay lại menu thường
+                                                    );
                                                   }}
                                                   className="flex-1 py-1 text-[10px] bg-white border rounded hover:bg-gray-100 text-gray-600"
                                                 >
@@ -672,7 +666,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                                                     e.stopPropagation();
                                                     handleDeleteComment(
                                                       comment.id
-                                                    ); // Xóa thật
+                                                    );
                                                   }}
                                                   className="flex-1 py-1 text-[10px] bg-red-600 text-white rounded hover:bg-red-700 font-bold"
                                                 >
@@ -681,7 +675,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                                               </div>
                                             </div>
                                           ) : (
-                                            // LOGIC: Menu bình thường (Edit / Delete)
                                             <>
                                               <button
                                                 onClick={(e) => {
@@ -697,7 +690,7 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                                                   e.stopPropagation();
                                                   setConfirmDeleteCommentId(
                                                     comment.id
-                                                  ); // Chuyển sang chế độ xác nhận
+                                                  );
                                                 }}
                                                 className="w-full text-left px-3 py-2 text-xs flex gap-2 hover:bg-red-50 dark:hover:bg-slate-800 text-red-600 transition-colors cursor-pointer"
                                               >
@@ -711,7 +704,6 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
                                   )}
                               </div>
 
-                              {/* MỚI: Hiển thị nội dung hoặc ô Input khi sửa */}
                               {editingCommentId === comment.id ? (
                                 <div className="mt-1">
                                   <Input
@@ -819,5 +811,4 @@ const PostItem = ({ post, onDelete, onUpdate, onImageClick }) => {
   );
 };
 
-// Custom comparison để control chính xác khi nào re-render
-export default PostItem;
+export default memo(PostItem);

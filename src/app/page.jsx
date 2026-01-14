@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
 import { Search, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase/client";
@@ -92,8 +98,7 @@ const NewsFeedPage = () => {
       revalidateOnFocus: false,
     });
 
-  const kudosList = data ? data.flat() : [];
-
+  const kudosList = useMemo(() => (data ? data.flat() : []), [data]);
   const isLoadingMore =
     isLoading || (size > 0 && data && typeof data[size - 1] === "undefined");
   const isEmpty = !isLoading && kudosList.length === 0;
@@ -103,73 +108,106 @@ const NewsFeedPage = () => {
   const refreshFeed = () => {
     mutate();
   };
+  const deletePostFromList = useCallback(
+    async (postId) => {
+      await mutate((currentData) => {
+        if (!currentData) {
+          return [];
+        }
+        const newData = currentData.map((page) =>
+          page.filter((p) => p.id !== postId)
+        );
+        return newData;
+      }, false);
+    },
+    [mutate]
+  );
+  const updatePostInList = useCallback(
+    async (updatedPost) => {
+      await mutate((currentData) => {
+        if (!currentData) return [];
+        return currentData.map((page) =>
+          page.map((p) =>
+            p.id === updatedPost.id ? { ...p, ...updatedPost } : p
+          )
+        );
+      }, false);
+    },
+    [mutate]
+  );
 
   // --- HÀM 1: XỬ LÝ POST MỚI ---
-  const handleNewPostRealtime = async (newPostId) => {
-    const { data: newPostData, error } = await supabase
-      .from("kudos")
-      .select(
-        `
+  const handleNewPostRealtime = useCallback(
+    async (newPostId) => {
+      const { data: newPostData, error } = await supabase
+        .from("kudos")
+        .select(
+          `
         *, 
         sender:sender_id(full_name, avatar_url, id), 
         recipients:kudos_receivers(user:user_id(full_name, avatar_url, id)), 
         comments(id, content, created_at, user:user_id(full_name, avatar_url, id)), 
         reactions(id, type, user_id)
       `
-      )
-      .eq("id", newPostId)
-      .single();
+        )
+        .eq("id", newPostId)
+        .single();
 
-    if (error || !newPostData) return;
+      if (error || !newPostData) return;
 
-    const formattedPost = {
-      ...newPostData,
-      receiverList: newPostData.recipients
-        ? newPostData.recipients.map((r) => r.user)
-        : [],
-      image_urls:
-        newPostData.image_urls ||
-        (newPostData.image_url ? [newPostData.image_url] : []),
-      comments: [],
-      reactions: [],
-    };
+      const formattedPost = {
+        ...newPostData,
+        receiverList: newPostData.recipients
+          ? newPostData.recipients.map((r) => r.user)
+          : [],
+        image_urls:
+          newPostData.image_urls ||
+          (newPostData.image_url ? [newPostData.image_url] : []),
+        comments: [],
+        reactions: [],
+      };
 
-    await mutate((currentData) => {
-      if (!currentData) return [[formattedPost]];
-      const newFirstPage = [formattedPost, ...currentData[0]];
-      return [newFirstPage, ...currentData.slice(1)];
-    }, false);
-  };
+      await mutate((currentData) => {
+        if (!currentData) return [[formattedPost]];
+        const newFirstPage = [formattedPost, ...currentData[0]];
+        return [newFirstPage, ...currentData.slice(1)];
+      }, false);
+    },
+    [mutate, supabase]
+  );
 
   // --- HÀM 2: XỬ LÝ COMMENT MỚI ---
-  const handleNewCommentRealtime = async (newCommentId) => {
-    const { data: commentData, error } = await supabase
-      .from("comments")
-      .select(
-        `id, content, created_at, kudos_id, user:user_id(full_name, avatar_url, id)`
-      )
-      .eq("id", newCommentId)
-      .single();
+  const handleNewCommentRealtime = useCallback(
+    async (newCommentId) => {
+      const { data: commentData, error } = await supabase
+        .from("comments")
+        .select(
+          `id, content, created_at, kudos_id, user:user_id(full_name, avatar_url, id)`
+        )
+        .eq("id", newCommentId)
+        .single();
 
-    if (error || !commentData) return;
+      if (error || !commentData) return;
 
-    await mutate((currentData) => {
-      if (!currentData) return currentData;
-      return currentData.map((page) =>
-        page.map((post) => {
-          if (post.id === commentData.kudos_id) {
-            const exists = post.comments.some((c) => c.id === commentData.id);
-            if (exists) return post;
-            return {
-              ...post,
-              comments: [...post.comments, commentData],
-            };
-          }
-          return post;
-        })
-      );
-    }, false);
-  };
+      await mutate((currentData) => {
+        if (!currentData) return currentData;
+        return currentData.map((page) =>
+          page.map((post) => {
+            if (post.id === commentData.kudos_id) {
+              const exists = post.comments.some((c) => c.id === commentData.id);
+              if (exists) return post;
+              return {
+                ...post,
+                comments: [...post.comments, commentData],
+              };
+            }
+            return post;
+          })
+        );
+      }, false);
+    },
+    [mutate, supabase]
+  );
 
   // --- HÀM 3: XỬ LÝ REACTION MỚI (UPDATE/DELETE/INSERT) ---
   const handleReactionRealtime = async (payload) => {
@@ -219,7 +257,17 @@ const NewsFeedPage = () => {
       );
     }, false);
   };
+  // --- HÀM 4: XỬ LÝ KHI CÓ BÀI VIẾT BỊ XÓA (REALTIME) ---
+  const handleDeletedPostRealtime = useCallback(
+    async (payload) => {
+      const deletedId = payload.old.id;
+      if (!deletedId) return;
 
+      // Gọi lại hàm deletePostFromList để xóa khỏi giao diện
+      deletePostFromList(deletedId);
+    },
+    [deletePostFromList]
+  );
   // --- SETUP REALTIME SUBSCRIPTION ---
   useEffect(() => {
     const channel = supabase
@@ -240,30 +288,24 @@ const NewsFeedPage = () => {
         { event: "*", schema: "public", table: "reactions" },
         (payload) => handleReactionRealtime(payload)
       )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "kudos" },
+        (payload) => handleDeletedPostRealtime(payload)
+      )
       .subscribe();
 
     return () => {
+      channel.unsubscribe();
       supabase.removeChannel(channel);
     };
-  }, []);
-
-  const deletePostFromList = async (postId) => {
-    await mutate((currentData) => {
-      if (!currentData) return [];
-      return currentData.map((page) => page.filter((p) => p.id !== postId));
-    }, false);
-  };
-
-  const updatePostInList = async (updatedPost) => {
-    await mutate((currentData) => {
-      if (!currentData) return [];
-      return currentData.map((page) =>
-        page.map((p) =>
-          p.id === updatedPost.id ? { ...p, ...updatedPost } : p
-        )
-      );
-    }, false);
-  };
+  }, [
+    supabase,
+    handleNewPostRealtime,
+    handleNewCommentRealtime,
+    handleReactionRealtime,
+    handleDeletedPostRealtime,
+  ]);
 
   const isLoadingMoreRef = useRef(isLoadingMore);
   useEffect(() => {
